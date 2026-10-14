@@ -2,10 +2,11 @@
  *  副作用（都只在对应状态区间挂载，离开即移除）：
  *  - 舞台滚轮监听：selectCanWheelSwitch 成立期间
  *  - 离开页面前的浏览器确认：生成中与保存中（useLeaveGuard）
+ *  - 窄屏判断：matchMedia，决定详情浮卡默认是否展开（useNarrowViewport）
  *  - 视口尺寸监听：多尺寸舞台显示期间（useViewportSize）
  *  - 多尺寸各格的 Object URL：生成中，卸载或格子内容变化时回收（useBlobUrls） */
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
-import { DetailCard } from "../components/DetailCard";
+import { DetailCard, DetailToggle } from "../components/DetailCard";
 import { Carousel } from "../components/overlays/Carousel";
 import { Lightbox } from "../components/overlays/Lightbox";
 import { Stage } from "../components/Stage";
@@ -28,6 +29,7 @@ import {
 } from "../flows/navigation";
 import { useBlobUrls } from "../hooks/useBlobUrls";
 import { useLeaveGuard } from "../hooks/useLeaveGuard";
+import { useNarrowViewport } from "../hooks/useNarrowViewport";
 import { useObjectUrl } from "../hooks/useObjectUrl";
 import { useViewportSize } from "../hooks/useViewportSize";
 import type { WorkspaceAssets } from "../hooks/useWorkspaceAssets";
@@ -91,13 +93,19 @@ export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
   const viewMask = useWorkspace((s) => s.view.viewMask);
   const viewMaskUrl = useObjectUrl(viewMask?.base.blob);
   const wheelEnabled = useWorkspace(selectCanWheelSwitch);
-  /** 详情浮卡的手动收起按记录 id 记忆：换记录后自动重新出现 */
+  const narrow = useNarrowViewport();
+  /** 宽屏：默认展开，收起按记录 id 记忆，换记录后重新出现。
+   *  窄屏：默认收起（浮卡会盖住结果和工具条），只在用户点开的那条记录上展开 */
   const [detailClosedFor, setDetailClosedFor] = useState<string | null>(null);
+  const [detailOpenedFor, setDetailOpenedFor] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const lightbox =
     display?.images.find((image) => image.id === lightboxId) ?? null;
-  // 详情浮卡可见性：展示记录存在、非生成中、且未被用户收起（按记录 id 记忆）
-  const detailVisible = !!display && !gen && detailClosedFor !== display.row.id;
+  const detailVisible =
+    !!display &&
+    !gen &&
+    detailClosedFor !== display.row.id &&
+    (!narrow || detailOpenedFor === display.row.id);
 
   // 舞台滚轮切换历史：规则见 canWheelSwitch，不满足时不挂监听
   useEffect(() => {
@@ -141,6 +149,15 @@ export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
           onStart={expandBar}
         />
       </div>
+
+      {display && !gen && narrow && !detailVisible && (
+        <DetailToggle
+          onOpen={() => {
+            setDetailClosedFor(null);
+            setDetailOpenedFor(display.row.id);
+          }}
+        />
+      )}
 
       {display && detailVisible && (
         <DetailCard

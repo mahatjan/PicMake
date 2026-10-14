@@ -204,6 +204,18 @@
 .pm-bar-ta:disabled {
   opacity: 0.6;
 }
+/* 窄屏：默认一行；有内容才按换行撑开，到 175px 后在框内滚动。空内容不因占位文案变高 */
+@media (max-width: 760px) {
+  .pm-bar-ta {
+    min-height: calc(1.5em + 22px);
+    max-height: 175px;
+  }
+  .pm-bar-ta:placeholder-shown {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
 .pm-bar-send {
   width: 36px;
   height: 36px;
@@ -270,6 +282,24 @@
 .pm-chip-wrap.right .pm-pop {
   left: auto;
   right: 0;
+}
+/* 窄屏：弹层不再从芯片往一侧长出屏幕。芯片取消定位，弹层相对创作条拉满宽度 */
+@media (max-width: 760px) {
+  .pm-chip-wrap,
+  .pm-chip-wrap.right {
+    position: static;
+  }
+  .pm-chip-wrap .pm-pop,
+  .pm-chip-wrap.right .pm-pop {
+    left: 0;
+    right: 0;
+    width: auto;
+    min-width: 0;
+    max-height: min(70vh, calc(100vh - 80px));
+    max-height: min(70dvh, calc(100dvh - 80px));
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
 }
 .pm-chip {
   display: inline-flex;
@@ -353,7 +383,7 @@
   bottom: calc(100% + 8px);
   left: 0;
   z-index: 45;
-  min-width: 225px;
+  min-width: var(--pm-pop-min, 225px);
   background: var(--pm-panel-solid);
   border: 1px solid var(--pm-line-2);
   border-radius: 10px;
@@ -486,11 +516,14 @@
   opacity: 0.45;
   cursor: not-allowed;
 }
-.pm-pop .pm-seg {
+.pm-pop .pm-seg.full {
   margin: 2px 5px 6px;
+  /* 压过 .pm-seg.full 的 width:100%，否则左 margin 会把控件顶偏，右边被裁掉 */
+  width: auto;
 }
 .pm-pop .pm-seg button {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
 }
 .pm-pop-wh {
   display: flex;

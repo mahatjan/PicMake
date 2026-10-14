@@ -80,6 +80,8 @@ export function InpaintModal(props: {
   const { doc, cursor } = props;
   const stageRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+  const botRef = useRef<HTMLDivElement>(null);
   const covRef = useRef<HTMLCanvasElement>(null);
   const cursorRingRef = useRef<HTMLDivElement>(null);
   const penBtnRef = useRef<HTMLButtonElement>(null);
@@ -111,9 +113,12 @@ export function InpaintModal(props: {
     const sh = stage.clientHeight;
     const narrow = sw < 760;
     const pad = narrow ? 28 : 56;
-    const bottomPad = narrow ? 92 : 104;
+    // 上下浮动条在窄屏会折行，高度不定：按实测值留白，底图不会被压住
+    const gap = 8;
+    const topEdge = 14 + (topRef.current?.offsetHeight ?? 40) + gap;
+    const botEdge = sh - 14 - (botRef.current?.offsetHeight ?? 40) - gap;
     const aw = Math.max(80, sw - pad * 2);
-    const ah = Math.max(80, sh - 64 - bottomPad);
+    const ah = Math.max(80, botEdge - topEdge);
     const r = doc.width / doc.height;
     let w = aw;
     let h = w / r;
@@ -122,7 +127,7 @@ export function InpaintModal(props: {
       w = h * r;
     }
     const left = pad + (aw - w) / 2;
-    const top = 64 + (ah - h) / 2;
+    const top = topEdge + (ah - h) / 2;
     setBox({
       fitW: w,
       fitH: h,
@@ -138,6 +143,9 @@ export function InpaintModal(props: {
     fit();
     const ro = new ResizeObserver(fit);
     if (stageRef.current) ro.observe(stageRef.current);
+    // 浮动条折行数变化也会改变可用高度，跟着它们一起重排
+    if (botRef.current) ro.observe(botRef.current);
+    if (topRef.current) ro.observe(topRef.current);
     return () => ro.disconnect();
   }, [fit]);
 
@@ -425,169 +433,71 @@ export function InpaintModal(props: {
             />
           </div>
 
-          <button
-            type="button"
-            className="pm-ip-close"
-            aria-label={t("inpaint.close")}
-            disabled={busy}
-            onClick={props.onRequestClose}
-          >
-            <X size={18} />
-          </button>
-
-          <div className="pm-ip-title">
-            <b>{t("inpaint.board")}</b>
-            <span className="name">{name}</span>
-            <span className="dims">
-              {props.baseW} × {props.baseH} px
-            </span>
-            {props.normalized && (
-              <span className="norm">{t("inpaint.normalized")}</span>
-            )}
-          </div>
-
-          <div
-            className="pm-ip-hist"
-            role="group"
-            aria-label={t("inpaint.history")}
-          >
+          <div className="pm-ip-topbar" ref={topRef}>
             <button
               type="button"
-              aria-label={t("common.undo")}
-              disabled={!canUndo || busy}
-              onClick={props.onUndo}
-            >
-              <Undo2 size={16} />
-            </button>
-            <button
-              type="button"
-              aria-label={t("common.redo")}
-              disabled={!canRedo || busy}
-              onClick={props.onRedo}
-            >
-              <Redo2 size={16} />
-            </button>
-            <button
-              type="button"
-              aria-label={t("inpaint.clearSelection")}
-              disabled={!hasSelection || busy}
-              onClick={props.onClear}
-            >
-              <Trash2 size={16} />
-            </button>
-            <span className="vr" />
-            <button
-              type="button"
-              aria-pressed={overlayHidden}
+              className="pm-ip-close"
+              aria-label={t("inpaint.close")}
               disabled={busy}
-              title={overlayHidden ? t("inpaint.show") : t("inpaint.hideTitle")}
-              onClick={() => setOverlayHidden((v) => !v)}
+              onClick={props.onRequestClose}
             >
-              {overlayHidden ? <EyeOff size={16} /> : <Eye size={16} />}
-              {overlayHidden ? t("inpaint.show") : t("inpaint.hide")}
+              <X size={18} />
             </button>
-          </div>
 
-          <div
-            className="pm-ip-zoombar"
-            role="group"
-            aria-label={t("inpaint.zoomGroup")}
-          >
-            <button
-              type="button"
-              aria-label={t("inpaint.zoomOut")}
-              disabled={zoom <= 1 || busy}
-              onClick={() => applyZoom(-0.25)}
-            >
-              <Minus size={14} />
-            </button>
-            <b>{Math.round(zoom * 100)}%</b>
-            <button
-              type="button"
-              aria-label={t("inpaint.zoomIn")}
-              disabled={zoom >= 8 || busy}
-              onClick={() => applyZoom(0.25)}
-            >
-              <Plus size={14} />
-            </button>
-            <button type="button" onClick={fitView} disabled={busy}>
-              <Maximize size={14} />
-              {t("inpaint.fit")}
-            </button>
-            <button
-              type="button"
-              className={tool === "pan" ? "on" : ""}
-              aria-pressed={tool === "pan"}
-              title={t("inpaint.panTitle")}
-              onClick={() => setTool((t) => (t === "pan" ? "pen" : "pan"))}
-            >
-              <Hand size={14} />
-              {t("inpaint.pan")}
-            </button>
-          </div>
+            <div className="pm-ip-title">
+              <b>{t("inpaint.board")}</b>
+              <span className="name">{name}</span>
+              <span className="dims">
+                {props.baseW} × {props.baseH} px
+              </span>
+              {props.normalized && (
+                <span className="norm">{t("inpaint.normalized")}</span>
+              )}
+            </div>
 
-          <div
-            className="pm-ip-tools"
-            role="toolbar"
-            aria-label={t("inpaint.tools")}
-          >
-            <button
-              type="button"
-              ref={penBtnRef}
-              className={tool === "pen" ? "on" : ""}
-              aria-label={t("inpaint.brush")}
-              aria-pressed={tool === "pen"}
-              title={t("inpaint.brushTitle")}
-              disabled={busy}
-              onClick={() => setTool("pen")}
+            <div
+              className="pm-ip-hist"
+              role="group"
+              aria-label={t("inpaint.history")}
             >
-              <Brush size={15} />
-              {t("inpaint.brush")}
-            </button>
-            <button
-              type="button"
-              className={tool === "eraser" ? "on" : ""}
-              aria-label={t("inpaint.erase")}
-              aria-pressed={tool === "eraser"}
-              title={t("inpaint.eraseTitle")}
-              disabled={busy}
-              onClick={() => setTool("eraser")}
-            >
-              <Eraser size={15} />
-              {t("inpaint.erase")}
-            </button>
-            <span className="vr" />
-            <label className="pm-ip-size">
-              {t("inpaint.size")}
-              <input
-                type="range"
-                aria-label={t("inpaint.sizeRange")}
-                min={brushRange.min}
-                max={brushRange.max}
-                step={1}
-                value={brush}
-                onChange={(e) => setBrush(Number(e.target.value))}
-              />
-              <input
-                type="number"
-                aria-label={t("inpaint.sizeNumber")}
-                min={brushRange.min}
-                max={brushRange.max}
-                step={1}
-                value={brush}
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  if (Number.isFinite(n))
-                    setBrush(
-                      Math.min(
-                        brushRange.max,
-                        Math.max(brushRange.min, Math.round(n)),
-                      ),
-                    );
-                }}
-              />
-              px
-            </label>
+              <button
+                type="button"
+                aria-label={t("common.undo")}
+                disabled={!canUndo || busy}
+                onClick={props.onUndo}
+              >
+                <Undo2 size={16} />
+              </button>
+              <button
+                type="button"
+                aria-label={t("common.redo")}
+                disabled={!canRedo || busy}
+                onClick={props.onRedo}
+              >
+                <Redo2 size={16} />
+              </button>
+              <button
+                type="button"
+                aria-label={t("inpaint.clearSelection")}
+                disabled={!hasSelection || busy}
+                onClick={props.onClear}
+              >
+                <Trash2 size={16} />
+              </button>
+              <span className="vr" />
+              <button
+                type="button"
+                aria-pressed={overlayHidden}
+                disabled={busy}
+                title={
+                  overlayHidden ? t("inpaint.show") : t("inpaint.hideTitle")
+                }
+                onClick={() => setOverlayHidden((v) => !v)}
+              >
+                {overlayHidden ? <EyeOff size={16} /> : <Eye size={16} />}
+                {overlayHidden ? t("inpaint.show") : t("inpaint.hide")}
+              </button>
+            </div>
           </div>
 
           {props.error && (
@@ -599,15 +509,119 @@ export function InpaintModal(props: {
             <p className="pm-ip-hint">{t("inpaint.hint")}</p>
           )}
 
-          <button
-            type="button"
-            className={"pm-ip-use" + (hasSelection && !busy ? " ready" : "")}
-            disabled={!hasSelection || busy}
-            onClick={props.onConfirm}
-          >
-            {busy ? <Loader2 size={16} /> : <Check size={16} />}
-            {busy ? t("inpaint.busy") : t("inpaint.use")}
-          </button>
+          <div className="pm-ip-botbar" ref={botRef}>
+            <div
+              className="pm-ip-zoombar"
+              role="group"
+              aria-label={t("inpaint.zoomGroup")}
+            >
+              <button
+                type="button"
+                aria-label={t("inpaint.zoomOut")}
+                disabled={zoom <= 1 || busy}
+                onClick={() => applyZoom(-0.25)}
+              >
+                <Minus size={14} />
+              </button>
+              <b>{Math.round(zoom * 100)}%</b>
+              <button
+                type="button"
+                aria-label={t("inpaint.zoomIn")}
+                disabled={zoom >= 8 || busy}
+                onClick={() => applyZoom(0.25)}
+              >
+                <Plus size={14} />
+              </button>
+              <button type="button" onClick={fitView} disabled={busy}>
+                <Maximize size={14} />
+                {t("inpaint.fit")}
+              </button>
+              <button
+                type="button"
+                className={tool === "pan" ? "on" : ""}
+                aria-pressed={tool === "pan"}
+                title={t("inpaint.panTitle")}
+                onClick={() => setTool((t) => (t === "pan" ? "pen" : "pan"))}
+              >
+                <Hand size={14} />
+                {t("inpaint.pan")}
+              </button>
+            </div>
+
+            <div
+              className="pm-ip-tools"
+              role="toolbar"
+              aria-label={t("inpaint.tools")}
+            >
+              <button
+                type="button"
+                ref={penBtnRef}
+                className={tool === "pen" ? "on" : ""}
+                aria-label={t("inpaint.brush")}
+                aria-pressed={tool === "pen"}
+                title={t("inpaint.brushTitle")}
+                disabled={busy}
+                onClick={() => setTool("pen")}
+              >
+                <Brush size={15} />
+                {t("inpaint.brush")}
+              </button>
+              <button
+                type="button"
+                className={tool === "eraser" ? "on" : ""}
+                aria-label={t("inpaint.erase")}
+                aria-pressed={tool === "eraser"}
+                title={t("inpaint.eraseTitle")}
+                disabled={busy}
+                onClick={() => setTool("eraser")}
+              >
+                <Eraser size={15} />
+                {t("inpaint.erase")}
+              </button>
+              <span className="vr" />
+              <label className="pm-ip-size">
+                {t("inpaint.size")}
+                <input
+                  type="range"
+                  aria-label={t("inpaint.sizeRange")}
+                  min={brushRange.min}
+                  max={brushRange.max}
+                  step={1}
+                  value={brush}
+                  onChange={(e) => setBrush(Number(e.target.value))}
+                />
+                <input
+                  type="number"
+                  aria-label={t("inpaint.sizeNumber")}
+                  min={brushRange.min}
+                  max={brushRange.max}
+                  step={1}
+                  value={brush}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    if (Number.isFinite(n))
+                      setBrush(
+                        Math.min(
+                          brushRange.max,
+                          Math.max(brushRange.min, Math.round(n)),
+                        ),
+                      );
+                  }}
+                />
+                px
+              </label>
+            </div>
+
+            <button
+              type="button"
+              className={"pm-ip-use" + (hasSelection && !busy ? " ready" : "")}
+              disabled={!hasSelection || busy}
+              onClick={props.onConfirm}
+            >
+              {busy ? <Loader2 size={16} /> : <Check size={16} />}
+              {busy ? t("inpaint.busy") : t("inpaint.use")}
+            </button>
+          </div>
         </div>
       </div>
     </FocusScope>

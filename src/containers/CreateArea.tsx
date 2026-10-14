@@ -19,6 +19,7 @@ import {
   returnToResult,
   reuseParams,
 } from "../flows/navigation";
+import { useCreateBarInset } from "../hooks/useCreateBarInset";
 import { useDraftImages } from "../hooks/useDraftImages";
 import type { WorkspaceAssets } from "../hooks/useWorkspaceAssets";
 import { customOk } from "../lib/params";
@@ -72,6 +73,8 @@ export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
 
   // focusSeq 变化即聚焦描述框（展开创作条、草稿落位、描述为空时提交）
   const promptRef = useRef<HTMLTextAreaElement>(null);
+  const barRef = useRef<HTMLElement>(null);
+  useCreateBarInset(barRef);
   useEffect(() => {
     if (focusSeq) requestAnimationFrame(() => promptRef.current?.focus());
   }, [focusSeq]);
@@ -115,6 +118,7 @@ export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
         sketchSize={sketchSize}
         inpaint={inpaintInfo}
         promptRef={promptRef}
+        barRef={barRef}
         onPatch={patchForm}
         onGenerate={generate}
         onCancel={cancelGenerate}

@@ -38,6 +38,13 @@
   background: var(--pm-line);
   margin: 0 4px;
 }
+/* 窄屏顶栏只留操作按钮，品牌和分隔线让给右上角详情 */
+@media (max-width: 760px) {
+  .pm-brand,
+  .pm-nav .pm-vr {
+    display: none;
+  }
+}
 /* HeroUI ghost 图标按钮对齐原型灰阶 */
 .pm-nav button,
 .pm-gen-pill button,

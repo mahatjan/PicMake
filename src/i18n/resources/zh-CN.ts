@@ -114,6 +114,7 @@ export const zhCN = {
     starTitle: "收藏",
     unstarTitle: "取消收藏",
     collapse: "收起详情",
+    open: "详情",
     model: "模型",
     size: "尺寸",
     quality: "质量",

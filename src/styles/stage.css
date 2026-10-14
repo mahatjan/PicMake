@@ -314,6 +314,43 @@
 .pm-pop-hint.warn {
   color: var(--pm-error);
 }
+/* 窄屏：一行五等分，图标在上、文字在下，避免「删除」单独掉到第二行。
+   工具条默认停在距底 200px。创作条被输入框撑高后，--pm-bar-top 是条上沿到视口底边的距离，
+   工具条改贴在条上方 10px，舞台留白同步上移；条没超过预留高度时保持原位。 */
+@media (max-width: 760px) {
+  .pm-stage {
+    padding-bottom: calc(
+      150px + max(0px, var(--pm-bar-top, 0px) + 10px - 200px)
+    );
+  }
+  .pm-stage-toolbar {
+    bottom: max(200px, calc(var(--pm-bar-top, 0px) + 10px));
+    left: 12px;
+    right: 12px;
+    width: auto;
+    transform: none;
+    gap: 2px;
+    padding: 4px;
+    border-radius: 14px;
+  }
+  .pm-stage-toolbar button {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 4px;
+    padding: 8px 2px 7px;
+    border-radius: 10px;
+    font-size: 11px;
+    line-height: 1.25;
+    white-space: normal;
+    text-align: center;
+  }
+  .pm-stage-toolbar button svg {
+    flex: none;
+  }
+}
 
 /* 多张网格 */
 .pm-grid4 {

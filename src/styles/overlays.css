@@ -87,6 +87,12 @@
   align-items: center;
   gap: 12px;
 }
+.pm-lb-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
 .pm-lb-bar p {
   flex: 1;
   font-size: 12.5px;
@@ -95,6 +101,53 @@
   overflow: hidden;
   text-overflow: ellipsis;
   margin: 0;
+}
+/* 窄屏：描述单独占行，按钮等分；图按视口尽量放大，底栏仍留在屏内 */
+@media (max-width: 760px) {
+  .pm-lb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+    padding: 64px 16px 20px;
+  }
+  .pm-lb-wrap {
+    width: min(calc(100vw - 32px), calc((100vh - 220px) * 3 / 2));
+    width: min(calc(100vw - 32px), calc((100dvh - 220px) * 3 / 2));
+    max-width: 100%;
+    margin: auto;
+    min-width: 0;
+  }
+  .pm-lb-im {
+    width: 100%;
+  }
+  .pm-lb-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .pm-lb-bar p {
+    flex: none;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.5;
+  }
+  .pm-lb-actions {
+    width: 100%;
+    gap: 8px;
+  }
+  .pm-lb-actions button {
+    flex: 1 1 0;
+    min-width: 0;
+    height: auto;
+    min-height: 36px;
+    padding-inline: 6px;
+    white-space: normal;
+    line-height: 1.25;
+    text-align: center;
+  }
 }
 
 /* 轮播：z 低于灯箱 */

@@ -119,6 +119,109 @@ test("画一张草图并确认：作为输入图落进创作条", async ({ page 
   await expect(page.getByRole("button", { name: "移除图1" })).toBeVisible();
 });
 
+test("窄屏下选区编辑器的浮动控件互不重叠，也不溢出", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await configure(page);
+  await expandBar(page);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "base.png",
+    mimeType: "image/png",
+    buffer: solidPng(256, 256),
+  });
+  await page.getByRole("button", { name: "对图1发起局部重绘" }).click();
+
+  const board = page.getByRole("dialog", { name: "选择修改区域" });
+  await expect(board).toBeVisible();
+  const viewport = page.viewportSize()!;
+  // 关闭键、标题、历史条、缩放条、工具条、确认按钮：两两不相交，且都在视口内
+  const parts = [
+    board.locator(".pm-ip-close"),
+    board.locator(".pm-ip-title"),
+    board.locator(".pm-ip-hist"),
+    board.locator(".pm-ip-zoombar"),
+    board.locator(".pm-ip-tools"),
+    board.locator(".pm-ip-use"),
+  ];
+  const boxes: { name: string; b: DOMRect }[] = [];
+  for (const part of parts) {
+    const b = (await part.boundingBox())!;
+    expect(b, "控件应当可见").not.toBeNull();
+    boxes.push({ name: (await part.getAttribute("class"))!, b });
+  }
+  for (const { name, b } of boxes) {
+    expect(b.x, `${name} 左侧溢出`).toBeGreaterThanOrEqual(-0.5);
+    expect(b.y, `${name} 顶部溢出`).toBeGreaterThanOrEqual(-0.5);
+    expect(b.x + b.width, `${name} 右侧溢出`).toBeLessThanOrEqual(
+      viewport.width + 0.5,
+    );
+    expect(b.y + b.height, `${name} 底部溢出`).toBeLessThanOrEqual(
+      viewport.height + 0.5,
+    );
+  }
+  const hits: string[] = [];
+  for (let i = 0; i < boxes.length; i++)
+    for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i].b;
+      const c = boxes[j].b;
+      const overlap =
+        a.x < c.x + c.width &&
+        c.x < a.x + a.width &&
+        a.y < c.y + c.height &&
+        c.y < a.y + a.height;
+      if (overlap) hits.push(`${boxes[i].name} × ${boxes[j].name}`);
+    }
+  expect(hits, "浮动控件重叠：" + hits.join(", ")).toEqual([]);
+});
+
+test("窄屏下草图画板的浮动控件互不重叠，也不溢出", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await configure(page);
+  await expandBar(page);
+  await page.getByRole("button", { name: "添加输入" }).click();
+  await page.getByRole("button", { name: /画草图/ }).click();
+
+  const board = page.getByRole("dialog", { name: "草图画板" });
+  await expect(board).toBeVisible();
+  const viewport = page.viewportSize()!;
+  const parts = [
+    board.locator(".pm-sk-close"),
+    board.locator(".pm-sk-pill"),
+    board.locator(".pm-sk-hist"),
+    board.locator(".pm-sk-sizer-wrap"),
+    board.locator(".pm-sk-colors"),
+    board.locator(".pm-sk-use"),
+  ];
+  const boxes: { name: string; b: DOMRect }[] = [];
+  for (const part of parts) {
+    const b = (await part.boundingBox())!;
+    boxes.push({ name: (await part.getAttribute("class"))!, b });
+  }
+  for (const { name, b } of boxes) {
+    expect(b.x, `${name} 左侧溢出`).toBeGreaterThanOrEqual(-0.5);
+    expect(b.y, `${name} 顶部溢出`).toBeGreaterThanOrEqual(-0.5);
+    expect(b.x + b.width, `${name} 右侧溢出`).toBeLessThanOrEqual(
+      viewport.width + 0.5,
+    );
+    expect(b.y + b.height, `${name} 底部溢出`).toBeLessThanOrEqual(
+      viewport.height + 0.5,
+    );
+  }
+  const hits: string[] = [];
+  for (let i = 0; i < boxes.length; i++)
+    for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i].b;
+      const c = boxes[j].b;
+      if (
+        a.x < c.x + c.width &&
+        c.x < a.x + a.width &&
+        a.y < c.y + c.height &&
+        c.y < a.y + a.height
+      )
+        hits.push(`${boxes[i].name} × ${boxes[j].name}`);
+    }
+  expect(hits, "浮动控件重叠：" + hits.join(", ")).toEqual([]);
+});
+
 test("局部重绘：上传底图、涂选、生成，并能查看保存的选区", async ({ page }) => {
   await configure(page);
   await expandBar(page);

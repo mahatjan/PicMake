@@ -7,6 +7,21 @@ import { fmtDuration } from "../lib/format";
 import { MODEL_LABELS, missingSizes } from "../lib/params";
 import type { DisplayGen, DisplayInput } from "../lib/view-models";
 
+/** 窄屏收起详情时的入口，点开后才出现浮卡 */
+export function DetailToggle(props: { onOpen: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <button
+      type="button"
+      className="pm-island pm-detail-toggle"
+      aria-label={t("detail.label")}
+      onClick={props.onOpen}
+    >
+      {t("detail.open")}
+    </button>
+  );
+}
+
 export function DetailCard(props: {
   display: DisplayGen;
   selectedImageId: string | null;

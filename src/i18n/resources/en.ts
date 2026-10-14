@@ -116,6 +116,7 @@ export const en = {
     starTitle: "Favorite",
     unstarTitle: "Remove from favorites",
     collapse: "Hide details",
+    open: "Details",
     model: "Model",
     size: "Size",
     quality: "Quality",

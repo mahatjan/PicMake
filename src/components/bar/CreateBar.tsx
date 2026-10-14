@@ -1,5 +1,5 @@
 /** 底部创作条：mini / full / generating / complete 四态，纯展示；弹层开合为内部状态 */
-import { useRef, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowUp, Paperclip, Pencil, Plus, RotateCcw } from "lucide-react";
 import { sizeReasonText, uploadIssueText } from "../../i18n/labels";
@@ -66,6 +66,28 @@ function FullBar(props: FullBarProps) {
   const inpaint = props.inpaint;
   const sizeBlocked = !!inpaint?.suggested && !inpaint.accepted;
   const ready = !props.reading && !sizeBlocked && f.prompt.trim().length > 0;
+  // 窄屏输入框随内容增高，离开 full 态即卸下监听并清掉行内高度
+  useEffect(() => {
+    const el = props.promptRef.current;
+    if (!el) return;
+    const mq = window.matchMedia("(max-width: 760px)");
+    const fit = () => {
+      if (!mq.matches || !el.value) {
+        el.style.height = "";
+        return;
+      }
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight}px`;
+    };
+    fit();
+    mq.addEventListener("change", fit);
+    window.addEventListener("resize", fit);
+    return () => {
+      mq.removeEventListener("change", fit);
+      window.removeEventListener("resize", fit);
+      el.style.height = "";
+    };
+  }, [f.prompt, props.promptRef]);
   return (
     <div className="pm-bar-full">
       <input
@@ -247,6 +269,8 @@ export function CreateBar(
     onTweak: () => void;
     onDownloadAll: () => void;
     onUseAsRef: () => void;
+    /** 根节点，供容器量创作条高度 */
+    barRef: RefObject<HTMLElement | null>;
   },
 ) {
   const {
@@ -261,12 +285,14 @@ export function CreateBar(
     onTweak,
     onDownloadAll,
     onUseAsRef,
+    barRef,
     ...full
   } = props;
   const { t } = useTranslation();
   const state = generating ? "generating" : done ? "complete" : mode;
   return (
     <section
+      ref={barRef}
       className="pm-island pm-bar"
       aria-label={t("bar.label")}
       data-state={state}

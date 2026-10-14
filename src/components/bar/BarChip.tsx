@@ -1,5 +1,11 @@
 /** 值 chip + 向上弹层原语（BarChip / PopRow） */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 export function BarChip(props: {
   ariaLabel: string;
@@ -59,7 +65,11 @@ export function BarChip(props: {
       {open && (
         <div
           className="pm-pop"
-          style={props.popWidth ? { minWidth: props.popWidth } : undefined}
+          style={
+            props.popWidth
+              ? ({ "--pm-pop-min": `${props.popWidth}px` } as CSSProperties)
+              : undefined
+          }
           role="dialog"
           aria-label={props.ariaLabel}
           onClick={(e) => {

@@ -399,6 +399,11 @@
     right: 16px;
     bottom: 18px;
   }
+  /* 四个工具按钮的胶囊居中后会撞上右侧历史条，历史条换到下一行 */
+  .pm-sk-hist {
+    top: 62px;
+    right: 14px;
+  }
   .pm-sk-meta {
     display: none;
   }

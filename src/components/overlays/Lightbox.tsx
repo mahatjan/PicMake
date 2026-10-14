@@ -39,17 +39,19 @@ export function Lightbox(props: {
         />
         <div className="pm-lb-bar">
           <p>{props.prompt}</p>
-          <Button variant="secondary" onPress={props.onDownload}>
-            {t("common.download")}
-          </Button>
-          {props.onReuse && (
-            <Button variant="primary" onPress={props.onReuse}>
-              {t("stage.reuse")}
+          <div className="pm-lb-actions">
+            <Button variant="secondary" onPress={props.onDownload}>
+              {t("common.download")}
             </Button>
-          )}
-          <Button variant="secondary" onPress={props.onClose}>
-            {t("common.close")}
-          </Button>
+            {props.onReuse && (
+              <Button variant="primary" onPress={props.onReuse}>
+                {t("stage.reuse")}
+              </Button>
+            )}
+            <Button variant="secondary" onPress={props.onClose}>
+              {t("common.close")}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
