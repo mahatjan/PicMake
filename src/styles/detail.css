@@ -1,6 +1,6 @@
 /* ══ 详情浮卡 ══ */
 .pm-detail {
-  top: 14px;
+  top: calc(14px + env(safe-area-inset-top, 0px));
   right: 14px;
   width: 270px;
   z-index: 11;
@@ -200,7 +200,7 @@
 }
 /* 窄屏默认收起时的入口。高度与顶栏一致（sm 图标 36px + 上下 padding 5px + 边框 2px），同一 top 即垂直居中 */
 .pm-detail-toggle {
-  top: 14px;
+  top: calc(14px + env(safe-area-inset-top, 0px));
   right: 14px;
   z-index: 11;
   display: flex;
@@ -215,12 +215,18 @@
 /* 窄屏点开后改成顶栏下方的可滚动面板，盖住创作条，避免和工具条各裁一截 */
 @media (max-width: 760px) {
   .pm-detail {
-    top: 58px;
+    top: calc(58px + env(safe-area-inset-top, 0px));
     right: 12px;
     left: 12px;
     width: auto;
-    max-height: calc(100vh - 70px);
-    max-height: calc(100dvh - 70px);
+    max-height: calc(
+      100vh - 70px - env(safe-area-inset-top, 0px) -
+        env(safe-area-inset-bottom, 0px)
+    );
+    max-height: calc(
+      100dvh - 70px - env(safe-area-inset-top, 0px) -
+        env(safe-area-inset-bottom, 0px)
+    );
     overflow-y: auto;
     z-index: 30;
   }

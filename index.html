@@ -2,16 +2,24 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <!-- 主屏幕状态栏不透明、深色字，浅色页面上才读得清。重新添加到主屏幕后生效 -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="theme-color" content="#f7f8f9" />
-    <title>PicMake</title>
+    <title>AiTools</title>
     <script>
       // 主题防闪烁：先于首帧把 .dark 落到 <html>（偏好存于 PicMake-settings，默认跟随系统）
       (() => {

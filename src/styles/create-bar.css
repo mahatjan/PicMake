@@ -1,7 +1,13 @@
 /* ══ 底部创作条 ══ */
 .pm-bar {
   left: 50%;
-  bottom: 18px;
+  /* 键盘盖住视口时 --pm-keyboard 抵消 safe-area，避免条和键盘之间空出 Safari 底栏 */
+  bottom: calc(
+    18px + max(0px, env(safe-area-inset-bottom, 0px) - var(--pm-keyboard, 0px))
+  );
+  /* 不用浮岛的半透明模糊：底下的舞台会透成一块渐变 */
+  background: var(--pm-panel-solid);
+  backdrop-filter: none;
   transform: translateX(-50%);
   width: min(820px, calc(100vw - 36px));
   z-index: 12;
@@ -20,8 +26,34 @@
 }
 .pm-bar[data-state="full"] {
   box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.55),
+    var(--pm-shadow-lg),
     0 0 0 1px var(--pm-accent-border);
+}
+/* 窄屏贴底：条向下盖住安全区，内边距把内容抬回 Home 指示条之上。
+   键盘弹出时 --pm-keyboard 抵消这段外伸，避免条和键盘之间再空出底色。 */
+@media (max-width: 760px) {
+  .pm-bar {
+    left: 0;
+    right: 0;
+    width: auto;
+    transform: none;
+    bottom: calc(
+      var(--pm-keyboard, 0px) -
+        max(0px, env(safe-area-inset-bottom, 0px) - var(--pm-keyboard, 0px))
+    );
+    border-radius: 16px 16px 0 0;
+    padding-bottom: calc(
+      8px + max(0px, env(safe-area-inset-bottom, 0px) - var(--pm-keyboard, 0px))
+    );
+  }
+  .pm-bar[data-state="full"],
+  .pm-bar[data-state="generating"],
+  .pm-bar[data-state="complete"] {
+    padding-bottom: calc(
+      12px +
+        max(0px, env(safe-area-inset-bottom, 0px) - var(--pm-keyboard, 0px))
+    );
+  }
 }
 
 /* mini 态 */
@@ -204,11 +236,13 @@
 .pm-bar-ta:disabled {
   opacity: 0.6;
 }
-/* 窄屏：默认一行；有内容才按换行撑开，到 175px 后在框内滚动。空内容不因占位文案变高 */
+/* 窄屏：默认一行；有内容才按换行撑开，到 175px 后在框内滚动。空内容不因占位文案变高。
+   字号至少 16px，否则 iOS 聚焦输入框时会把整页放大，失焦也不还原。 */
 @media (max-width: 760px) {
   .pm-bar-ta {
     min-height: calc(1.5em + 22px);
     max-height: 175px;
+    font-size: 16px;
   }
   .pm-bar-ta:placeholder-shown {
     white-space: nowrap;

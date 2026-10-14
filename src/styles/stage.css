@@ -1,7 +1,29 @@
-/* 舞台 */
+/* 舞台：自成一层。裁掉背景模糊的外溢，并向下盖住底部安全区，避免露出另一层底色 */
 .pm-stage-col {
   position: fixed;
   inset: 0;
+  bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+  z-index: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+/* iOS 主屏幕 Web App 会在 viewport-fit=cover 下把舞台绘制进透明状态栏。
+   直接从背景滤镜层裁掉顶部，避免 Safari 把独立合成的模糊层盖到 pm-nav 周围。 */
+@media (max-width: 760px) and (display-mode: standalone) {
+  .pm-stage-bg {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent calc(176px + env(safe-area-inset-top, 0px)),
+      #000 calc(290px + env(safe-area-inset-top, 0px))
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent calc(176px + env(safe-area-inset-top, 0px)),
+      #000 calc(290px + env(safe-area-inset-top, 0px))
+    );
+  }
 }
 .pm-stage {
   position: absolute;
@@ -12,7 +34,8 @@
 }
 .pm-stage-bg {
   position: absolute;
-  inset: 0;
+  /* 放大后再由舞台裁切，模糊取样不到透明边缘，顶部不会晕出一块盖住导航 */
+  inset: -80px;
   background-size: cover;
   background-position: center;
   filter: blur(60px) saturate(1.1);
@@ -29,7 +52,6 @@
     var(--pm-vignette)
   );
 }
-
 .pm-stage-swap {
   display: grid;
   place-items: center;
@@ -205,7 +227,7 @@
 .pm-gen-pill {
   position: absolute;
   z-index: 3;
-  top: 18px;
+  top: calc(18px + env(safe-area-inset-top, 0px));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -318,6 +340,28 @@
    工具条默认停在距底 200px。创作条被输入框撑高后，--pm-bar-top 是条上沿到视口底边的距离，
    工具条改贴在条上方 10px，舞台留白同步上移；条没超过预留高度时保持原位。 */
 @media (max-width: 760px) {
+  /* 顶栏在左（约 14+128px）、胶囊从 158px 起到右缘，中间留缝，避免和 pm-nav 叠在一起 */
+  .pm-gen-pill {
+    left: 158px;
+    right: 14px;
+    width: auto;
+    max-width: none;
+    transform: none;
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    overflow: hidden;
+    background: var(--pm-panel-solid);
+    backdrop-filter: none;
+  }
+  .pm-gen-pill > .pm-dots,
+  .pm-gen-pill > button {
+    flex-shrink: 0;
+  }
+  .pm-gen-pill > span:not(.pm-dots) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .pm-stage {
     padding-bottom: calc(
       150px + max(0px, var(--pm-bar-top, 0px) + 10px - 200px)

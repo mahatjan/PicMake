@@ -11,14 +11,18 @@
   box-shadow: var(--pm-shadow-lg);
 }
 
-/* 顶左导航 */
+/* 顶左导航。实心底、不用背景模糊：舞台的大模糊在 Safari 里会盖住半透明顶栏 */
 .pm-nav {
-  top: 14px;
+  top: calc(14px + env(safe-area-inset-top, 0px));
   left: 14px;
+  z-index: 20;
+  isolation: isolate;
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 5px;
+  background: var(--pm-panel-solid);
+  backdrop-filter: none;
 }
 .pm-brand {
   display: flex;

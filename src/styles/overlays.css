@@ -63,6 +63,8 @@
   backdrop-filter: blur(8px);
   display: grid;
   place-items: center;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
 }
 .pm-lb-wrap {
   display: flex;
@@ -109,7 +111,10 @@
     align-items: center;
     justify-content: center;
     overflow: auto;
-    padding: 64px 16px 20px;
+    padding: calc(64px + env(safe-area-inset-top, 0px))
+      calc(16px + env(safe-area-inset-right, 0px))
+      calc(20px + env(safe-area-inset-bottom, 0px))
+      calc(16px + env(safe-area-inset-left, 0px));
   }
   .pm-lb-wrap {
     width: min(calc(100vw - 32px), calc((100vh - 220px) * 3 / 2));
@@ -159,6 +164,8 @@
   backdrop-filter: blur(8px);
   display: grid;
   place-items: center;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
 }
 .pm-car-fig {
   display: flex;
@@ -218,8 +225,8 @@
 }
 /* 浮层右上角关闭钮（灯箱 / 轮播共用） */
 .pm-x-btn {
-  top: 22px;
-  right: 22px;
+  top: calc(22px + env(safe-area-inset-top, 0px));
+  right: calc(22px + env(safe-area-inset-right, 0px));
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -241,7 +248,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 10px 10px 14px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 10px 10px 14px;
   border-bottom: 1px solid var(--pm-line);
   font-size: 12.5px;
   font-weight: 600;
@@ -311,7 +318,7 @@
 }
 .pm-drawer-f {
   border-top: 1px solid var(--pm-line);
-  padding: 9px 14px;
+  padding: 9px 14px calc(9px + env(safe-area-inset-bottom, 0px));
   font-size: 10.5px;
   color: var(--pm-text-3);
   display: flex;

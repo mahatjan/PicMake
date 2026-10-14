@@ -3,8 +3,14 @@
   position: fixed;
   inset: 0;
   z-index: 80;
-  display: grid;
-  place-items: center;
+  /* 安全区写在遮罩 padding 上，画板在内框里居中，上下 inset 不对称时也不会顶进刘海 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(24px + env(safe-area-inset-top, 0px))
+    calc(24px + env(safe-area-inset-right, 0px))
+    calc(24px + env(safe-area-inset-bottom, 0px))
+    calc(24px + env(safe-area-inset-left, 0px));
   background: var(--pm-scrim);
   animation: pm-sk-fade 0.18s ease-out;
 }
@@ -15,8 +21,8 @@
 }
 .pm-sk-board {
   position: relative;
-  width: min(1080px, calc(100vw - 48px));
-  height: min(780px, calc(100dvh - 48px));
+  width: min(1080px, 100%);
+  height: min(780px, 100%);
   background: var(--pm-sketch-paper);
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 20px;
@@ -369,9 +375,15 @@
 }
 
 @media (max-width: 700px) {
+  .pm-sk-overlay {
+    padding: calc(12px + env(safe-area-inset-top, 0px))
+      calc(12px + env(safe-area-inset-right, 0px))
+      calc(12px + env(safe-area-inset-bottom, 0px))
+      calc(12px + env(safe-area-inset-left, 0px));
+  }
   .pm-sk-board {
-    width: calc(100vw - 24px);
-    height: calc(100dvh - 24px);
+    width: 100%;
+    height: 100%;
   }
   .pm-sk-colors {
     gap: 8px;

@@ -50,7 +50,7 @@
       rgba(255, 255, 255, 0.5),
       transparent 55%
     ),
-    linear-gradient(180deg, #fdfdfe, #f0f1f3);
+    linear-gradient(180deg, #fdfdfe, var(--pm-bg));
 
   /* HeroUI 主题对齐 PicMake 令牌（浅色 + 杏色 accent，替换默认蓝色主题） */
   --background: var(--pm-bg);
@@ -139,7 +139,7 @@
   --pm-vignette: rgba(10, 10, 12, 0.82);
   --pm-stage-gen:
     radial-gradient(120% 90% at 50% 38%, var(--pm-fill), transparent 55%),
-    linear-gradient(180deg, #17181c, #101114);
+    linear-gradient(180deg, #17181c, var(--pm-bg));
 
   /* HeroUI 主题对齐 PicMake 令牌（暗色 + 杏色 accent，替换默认蓝色主题） */
   --surface-secondary: #1d1e22;
@@ -159,6 +159,13 @@ html,
 body,
 #root {
   height: 100%;
+}
+
+/* 回弹和底部安全区露出的底色与页面一致 */
+html {
+  background: var(--pm-bg);
+  min-height: 100%;
+  min-height: 100dvh;
 }
 
 body {

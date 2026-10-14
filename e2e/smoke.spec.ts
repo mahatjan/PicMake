@@ -4,6 +4,9 @@ import { MOCK, solidPng } from "./helpers.ts";
 const prompt = (page: Page) => page.getByRole("textbox", { name: "画面描述" });
 const generate = (page: Page) => page.getByRole("button", { name: "生成图片" });
 
+/** locator.boundingBox() 返回的包围盒 */
+type Box = { x: number; y: number; width: number; height: number };
+
 /** 首次进入：没有 Key 时自动弹出设置；填入 mock 地址并保存 */
 async function configure(page: Page) {
   await page.goto("/");
@@ -142,7 +145,7 @@ test("窄屏下选区编辑器的浮动控件互不重叠，也不溢出", async
     board.locator(".pm-ip-tools"),
     board.locator(".pm-ip-use"),
   ];
-  const boxes: { name: string; b: DOMRect }[] = [];
+  const boxes: { name: string; b: Box }[] = [];
   for (const part of parts) {
     const b = (await part.boundingBox())!;
     expect(b, "控件应当可见").not.toBeNull();
@@ -191,7 +194,7 @@ test("窄屏下草图画板的浮动控件互不重叠，也不溢出", async ({
     board.locator(".pm-sk-colors"),
     board.locator(".pm-sk-use"),
   ];
-  const boxes: { name: string; b: DOMRect }[] = [];
+  const boxes: { name: string; b: Box }[] = [];
   for (const part of parts) {
     const b = (await part.boundingBox())!;
     boxes.push({ name: (await part.getAttribute("class"))!, b });

@@ -16,12 +16,12 @@ export function TopNav(props: {
     <nav className="pm-island pm-nav" aria-label={t("nav.label")}>
       <div className="pm-brand">
         <img
-          src="/favicon.svg"
+          src={`${import.meta.env.BASE_URL}favicon.png`}
           alt=""
           aria-hidden="true"
           className="pm-brand-logo"
         />
-        PicMake
+        AiTools
       </div>
       <div className="pm-vr" aria-hidden="true" />
       <Button

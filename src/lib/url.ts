@@ -1,6 +1,6 @@
 /** API 地址归一化：兼容带/不带 /v1、尾斜杠 */
 
-export const DEFAULT_BASE_URL = "https://api.openai.com/v1";
+export const DEFAULT_BASE_URL = "https://www.97api.com";
 
 export function normalizeBaseUrl(input: string): string {
   let u = input.trim();
