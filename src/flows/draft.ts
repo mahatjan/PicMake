@@ -3,6 +3,7 @@ import { toast } from "@heroui/react";
 import { t } from "../i18n";
 import { readInputImage } from "../lib/input-images";
 import { ApiError, type InputImage, type UploadIssue } from "../lib/types";
+import { uuid } from "../lib/uuid";
 import { useWorkspace } from "../store/workspace";
 import {
   beginRead,
@@ -16,7 +17,7 @@ const currentReadId = () => useWorkspace.getState().draft.readId;
 /** 上传：逐个读取（只在内存，不写库）；上一批没读完时忽略，批次被打断就丢弃结果 */
 export async function addFiles(files: File[]) {
   if (!files.length || currentReadId() !== null) return;
-  const readId = crypto.randomUUID();
+  const readId = uuid();
   beginRead(readId);
   const added: InputImage[] = [];
   const issues: UploadIssue[] = [];

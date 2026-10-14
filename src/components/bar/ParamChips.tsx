@@ -1,6 +1,6 @@
 /** 参数 chips：模型、比例与基准、质量、张数、更多设置；各自带弹层，开合为内部状态 */
 import { useTranslation } from "react-i18next";
-import { ratioLabel, sizeChipValue } from "../../i18n/labels";
+import { modelSuffix, ratioLabel, sizeChipValue } from "../../i18n/labels";
 import {
   BASE_LABELS,
   DEFAULT_FORM,
@@ -62,11 +62,7 @@ export function ParamChips(props: {
       <BarChip
         ariaLabel={t("params.model")}
         value={MODEL_LABELS[f.model]}
-        suffix={
-          f.model === "flare"
-            ? t("params.modelFast")
-            : t("params.modelDetailed")
-        }
+        suffix={modelSuffix(f.model, t) ?? undefined}
         dirty={f.model !== DEFAULT_FORM.model}
         closeOnSelect
       >
@@ -81,6 +77,12 @@ export function ParamChips(props: {
           name={t("params.modelSunburst")}
           desc={t("params.modelSunburstDesc")}
           onClick={() => onPatch({ model: "sunburst" })}
+        />
+        <PopRow
+          selected={f.model === "gpt2"}
+          name={t("params.modelGpt2")}
+          desc={t("params.modelGpt2Desc")}
+          onClick={() => onPatch({ model: "gpt2" })}
         />
       </BarChip>
 

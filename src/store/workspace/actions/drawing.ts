@@ -1,6 +1,7 @@
 /** 画板迁移函数：草图与局部重绘的会话、笔画、游标、确认 */
 import type { ImageRow } from "../../../db/schema";
 import { commitCommand, sketchSnapshotKey } from "../../../lib/sketch";
+import { uuid } from "../../../lib/uuid";
 import {
   type InpaintDraft,
   type InpaintEntry,
@@ -25,7 +26,7 @@ export function openSketch(
   set({
     drawing: {
       kind: "sketch",
-      id: crypto.randomUUID(),
+      id: uuid(),
       doc,
       cursor: doc.commands.length,
       replacesImageId,
@@ -40,7 +41,7 @@ export function openSketch(
 /** 开始准备局部重绘底图：返回会话 id；已有画板时返回 null */
 export function beginInpaintOpening(): string | null {
   if (useWorkspace.getState().drawing) return null;
-  const id = crypto.randomUUID();
+  const id = uuid();
   set({ drawing: { kind: "opening", id } });
   return id;
 }

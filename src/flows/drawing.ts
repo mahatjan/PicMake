@@ -30,6 +30,7 @@ import {
   type InputSource,
   type MaskImage,
 } from "../lib/types";
+import { uuid } from "../lib/uuid";
 import { inputNaming, workIndexOf, type InputNaming } from "../lib/view-models";
 import { canOpenDrawing, isDrawingChanged } from "../lib/workspace-rules";
 import { useWorkspace } from "../store/workspace";
@@ -146,7 +147,7 @@ export function confirmSketch() {
       return;
     }
     const image: ImageRow = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       blob,
       width: frozen.width,
       height: frozen.height,
@@ -388,7 +389,7 @@ export function confirmInpaint() {
       return;
     }
     const mask: MaskImage = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       blob: result.blob,
       width: frozen.width,
       height: frozen.height,

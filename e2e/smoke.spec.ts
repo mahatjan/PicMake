@@ -40,6 +40,34 @@ test("输入描述生成图片，完成后保存到本地历史", async ({ page 
   await expect(drawer.getByText("雪夜的山顶小屋")).toBeVisible();
 });
 
+test("终稿只给图片 URL 时也能下载入库（中转不发 b64_json）", async ({
+  page,
+}) => {
+  await configure(page);
+  await expandBar(page);
+  await prompt(page).fill("只给 URL 的中转 [url]");
+  await generate(page).click();
+  await expect(page.getByText("生成完成 · 已保存本地")).toBeVisible();
+
+  await page.getByRole("button", { name: "历史" }).click();
+  const drawer = page.getByRole("dialog", { name: "生成历史" });
+  await expect(drawer.getByText("只给 URL 的中转")).toBeVisible();
+  // 缩略图是 background-image 的 div：取出 blob URL 真解码一次，
+  // 才能证明「URL → 下载 → base64 → Blob」这条链路存下来的是可用图片
+  const thumb = drawer.locator(".pm-dthumb").first();
+  const width = await thumb.evaluate(async (el) => {
+    const m = /url\("?(.+?)"?\)/.exec(getComputedStyle(el).backgroundImage);
+    if (!m) return 0;
+    return await new Promise<number>((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img.naturalWidth);
+      img.onerror = () => resolve(0);
+      img.src = m[1];
+    });
+  });
+  expect(width).toBeGreaterThan(0);
+});
+
 test("生成中可以取消，取消后回到可输入状态且草稿保留", async ({ page }) => {
   await configure(page);
   await expandBar(page);

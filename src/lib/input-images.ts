@@ -1,5 +1,6 @@
 import type { ImageRow } from "../db/schema";
 import { ApiError, MAX_INPUT_BYTES, type OutputFormat } from "./types";
+import { uuid } from "./uuid";
 
 export function imageFormat(bytes: Uint8Array): OutputFormat | null {
   if ([137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => bytes[i] === v))
@@ -25,7 +26,7 @@ export async function readInputImage(file: File): Promise<ImageRow> {
     const bitmap = await createImageBitmap(blob);
     const { width, height } = bitmap;
     bitmap.close();
-    return { id: crypto.randomUUID(), blob, width, height, format };
+    return { id: uuid(), blob, width, height, format };
   } catch {
     throw new ApiError("invalid-image", "");
   }

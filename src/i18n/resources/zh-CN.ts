@@ -201,6 +201,8 @@ export const zhCN = {
     modelFlareDesc: "约 10s 出图，日常迭代首选",
     modelSunburst: "Sunburst · 精细",
     modelSunburstDesc: "细节与文字渲染更强，速度较慢",
+    modelGpt2: "GPT Image 2",
+    modelGpt2Desc: "2.5 的上一代模型",
     ratioAndBase: "比例与基准",
     ratio: "比例",
     baseRes: "基准分辨率",

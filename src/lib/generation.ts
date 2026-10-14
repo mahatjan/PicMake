@@ -1,6 +1,7 @@
 import { b64Format, b64ToBlob } from "./blob";
 import type { EditSubmission, GenParams, ImageRequestResult } from "./types";
 import type { HistoryRow, ImageRow } from "../db/schema";
+import { uuid } from "./uuid";
 
 export interface PreparedGeneration {
   row: HistoryRow;
@@ -66,7 +67,7 @@ export function prepareGeneration(
   result: ImageRequestResult,
   edit: EditSubmission | undefined,
   startedAt: number,
-  id: () => string = () => crypto.randomUUID(),
+  id: () => string = uuid,
   /** 编辑/参考生成时的原始描述 */
   originPrompt?: string,
 ): PreparedGeneration {
@@ -110,7 +111,7 @@ export function prepareMultiGeneration(
   slots: readonly GeneratedSlot[],
   edit: EditSubmission | undefined,
   startedAt: number,
-  id: () => string = () => crypto.randomUUID(),
+  id: () => string = uuid,
   originPrompt?: string,
 ): PreparedGeneration {
   const images = slots.map((slot) => ({

@@ -1,6 +1,6 @@
 /** 核心类型定义 */
 
-export type ModelId = "flare" | "sunburst";
+export type ModelId = "flare" | "sunburst" | "gpt2";
 export type Quality = "low" | "medium" | "high" | "xhigh" | "max";
 export type Background = "auto" | "transparent" | "opaque";
 export type InputFidelity = "low" | "high";
@@ -16,6 +16,7 @@ export interface ApiConfig {
 export const MODEL_NAMES: Record<ModelId, string> = {
   flare: "gpt-image-2.5-flare",
   sunburst: "gpt-image-2.5-sunburst",
+  gpt2: "gpt-image-2",
 };
 
 /** 具体像素尺寸 */

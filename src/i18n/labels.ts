@@ -17,6 +17,7 @@ import { SIZE_LIMITS } from "../lib/size";
 import type {
   InpaintIssue,
   MissingResource,
+  ModelId,
   PixelSize,
   SizeSpec,
   SketchOrigin,
@@ -81,6 +82,18 @@ export function sizeCaption(size: PixelSize): string {
 
 export const ratioLabel = (id: RatioId, t: TFunction): string =>
   id === "auto" ? t("common.auto") : id;
+
+/** 模型 chip 值后面的短标签：2.5 的两个变体按速度/画质定位，无此定位的模型不显示 */
+const MODEL_SUFFIX: Record<ModelId, "modelFast" | "modelDetailed" | null> = {
+  flare: "modelFast",
+  sunburst: "modelDetailed",
+  gpt2: null,
+};
+
+export const modelSuffix = (model: ModelId, t: TFunction): string | null => {
+  const key = MODEL_SUFFIX[model];
+  return key ? t(`params.${key}`) : null;
+};
 
 /** 提交前校验提示（描述为空、尺寸问题等） */
 export const issueText = (issue: DraftIssue, t: TFunction): string =>

@@ -20,6 +20,7 @@ export type PresetRatio = Exclude<RatioId, "auto">;
 export const MODEL_LABELS: Record<ModelId, string> = {
   flare: "Flare",
   sunburst: "Sunburst",
+  gpt2: "GPT Image 2",
 };
 
 /** 比例 chip 的顺序；「auto」的显示名随语言，见 i18n/labels.ts */

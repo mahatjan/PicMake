@@ -113,6 +113,54 @@ describe("请求级 usage", () => {
   });
 });
 
+describe("只给 URL 的中转（object 事件名 + data[].url）", () => {
+  const url = "https://imgv1.example.com/images/a.png";
+
+  it("image.generation.result 的 url 被收集，不再当成没有图片", () => {
+    const result: ImageRequestResult = { images: [], usage: null };
+    const urls: string[] = [];
+    const parser = createImageParser({}, result, urls);
+    parser.feed(
+      [
+        `data: ${JSON.stringify({ object: "image.generation.chunk", index: 1, total: 1, progress_text: "", data: [] })}\n\n`,
+        `data: ${JSON.stringify({ object: "image.generation.chunk", upstream_event_type: "title_generation", data: [] })}\n\n`,
+        `data: ${JSON.stringify({ object: "image.generation.result", index: 1, total: 1, data: [{ url, revised_prompt: "改写后的描述" }] })}\n\n`,
+        "data: [DONE]\n\n",
+      ].join(""),
+    );
+    expect(result.images).toEqual([]);
+    expect(urls).toEqual([url]);
+  });
+
+  it("非流式响应里的 url 也被收集", () => {
+    const parsed = parseGenResponse({ data: [{ url }], usage });
+    expect(parsed.images).toEqual([]);
+    expect(parsed.urls).toEqual([url]);
+    expect(parsed.usage).toEqual(usage);
+  });
+
+  it("b64 与 url 混合时各自归位，两种事件命名都认", () => {
+    const result: ImageRequestResult = { images: [], usage: null };
+    const urls: string[] = [];
+    const parser = createImageParser({}, result, urls);
+    parser.feed(
+      [
+        `data: ${JSON.stringify({ type: "image_generation.completed", b64_json: "a", usage })}\n\n`,
+        `data: ${JSON.stringify({ object: "image.generation.result", data: [{ url }] })}\n\n`,
+        `event: image_edit.result\ndata: ${JSON.stringify({ b64_json: "b" })}\n\n`,
+      ].join(""),
+    );
+    expect(result.images).toEqual(["a", "b"]);
+    expect(urls).toEqual([url]);
+    expect(result.usage).toEqual(usage);
+  });
+
+  it("既没有 b64 也没有 url 的结果仍然拦截", () => {
+    expect(() => parseGenResponse({ data: [] })).toThrow();
+    expect(() => parseGenResponse({ data: [{}] })).toThrow();
+  });
+});
+
 describe("生成和编辑 SSE", () => {
   for (const endpoint of ["image_generation", "image_edit"]) {
     it(`${endpoint} 跨 chunk 预览、两张终稿和请求总量`, () => {

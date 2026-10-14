@@ -2,6 +2,7 @@
  *  损坏元数据返回明确错误，不让流程静默继续 */
 import { imageFormat } from "./input-images";
 import type { InpaintIssue } from "./types";
+import { uuid } from "./uuid";
 
 export type OrientationResult =
   /** 无方向标签（按 1 处理）或 orientation = 1 */
@@ -224,7 +225,7 @@ export async function prepareInpaintBase(
   /** 用户文件名；没有就不记（系统来源的名字在展示时按语言生成） */
   name: string | undefined,
   meta: Exclude<OrientationResult, { issue: InpaintIssue }>,
-  id: () => string = () => crypto.randomUUID(),
+  id: () => string = uuid,
 ): Promise<
   | {
       ok: true;

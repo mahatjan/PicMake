@@ -210,6 +210,8 @@ export const en = {
     modelFlareDesc: "About 10s per image, best for everyday iteration",
     modelSunburst: "Sunburst · Detailed",
     modelSunburstDesc: "Finer detail and text rendering, slower",
+    modelGpt2: "GPT Image 2",
+    modelGpt2Desc: "The generation before 2.5",
     ratioAndBase: "Ratio and base resolution",
     ratio: "Aspect ratio",
     baseRes: "Base resolution",

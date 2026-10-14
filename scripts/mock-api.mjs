@@ -10,11 +10,12 @@
  *   [stream-error]            第一个 partial 之后发 error 事件
  *   [slow]                    事件间隔 3 秒，便于测试取消
  *   [json]                    不走 SSE，直接返回 JSON（中转站兼容路径）
+ *   [url]                     只在 data[] 里给图片 URL（部分中转不发 b64_json，客户端需下载）
  *
  * 多尺寸生成每个比例是一个独立请求，描述里的标记会让所有比例一起触发。
  * 只想让某个尺寸触发，在标记里加 @宽x高，例如 [429@1792x1008]、[slow@1792x1008]、[500@1008x1792]：
  * 只有请求尺寸恰好是 1792 × 1008 的那个请求报 429 / 放慢，其余照常，用来验证部分失败与取消时保留已完成的图。
- * 适用于全部标记：[401] [403] [429] [500] [policy] [stream-error] [slow] [json]
+ * 适用于全部标记：[401] [403] [429] [500] [policy] [stream-error] [slow] [json] [url]
  */
 import http from "node:http";
 import zlib from "node:zlib";
@@ -165,10 +166,17 @@ function sendError(res, status, code, message) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function handleImages(res, request, edit) {
+/** 图片 URL：客户端拿到后要自己下载，路径里带尺寸与颜色便于直接重建 */
+function imageUrl(base, width, height, [r, g, b]) {
+  return `${base}/mock-image/${width}x${height}-${r}_${g}_${b}.png`;
+}
+
+async function handleImages(res, request, edit, base) {
   const { prompt, n, partialImages, stream } = request;
   const [width, height] = parseSize(request.size);
   const kind = edit ? "image_edit" : "image_generation";
+  // [url]：终稿只给 URL（不发 b64_json），模拟不发 base64 的中转
+  const urlOnly = marked(prompt, "url", width, height);
 
   for (const [marker, [status, code, message]] of Object.entries(HTTP_ERRORS)) {
     if (marked(prompt, marker.slice(1, -1), width, height))
@@ -189,7 +197,14 @@ async function handleImages(res, request, edit) {
   if (!stream || marked(prompt, "json", width, height)) {
     return sendJson(res, 200, {
       created: Math.floor(Date.now() / 1000),
-      data: finals.map((b64_json) => ({ b64_json })),
+      data: finals.map((b64_json, i) =>
+        urlOnly
+          ? {
+              url: imageUrl(base, width, height, colorFor(seed, i)),
+              revised_prompt: prompt,
+            }
+          : { b64_json },
+      ),
       usage,
     });
   }
@@ -208,6 +223,10 @@ async function handleImages(res, request, edit) {
       res.write(
         `event: ${type}\ndata: ${JSON.stringify({ type, ...payload })}\n\n`,
       );
+  };
+  // [url] 用的就是部分中转那套命名：object + image.<kind>.result，事件体里没有 b64_json
+  const sendRaw = (payload) => {
+    if (!closed) res.write(`data: ${JSON.stringify(payload)}\n\n`);
   };
   const gap = marked(prompt, "slow", width, height) ? 3000 : 400;
   const meta = { size: `${width}x${height}`, output_format: "png" };
@@ -238,7 +257,16 @@ async function handleImages(res, request, edit) {
     }
     await sleep(gap);
     if (closed) return;
-    send(`${kind}.completed`, { b64_json: finals[i], ...meta, usage });
+    if (urlOnly) {
+      sendRaw({
+        object: `${kind.replace("_", ".")}.result`,
+        index: i + 1,
+        total: n,
+        data: [{ url: imageUrl(base, width, height, final) }],
+      });
+    } else {
+      send(`${kind}.completed`, { b64_json: finals[i], ...meta, usage });
+    }
   }
   res.end();
 }
@@ -270,6 +298,27 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, { object: "list", data: MODELS });
       return;
     }
+    // [url] 标记指向的图片：客户端下载后转 base64
+    const image = /^\/mock-image\/(\d+)x(\d+)-(\d+)_(\d+)_(\d+)\.png$/.exec(
+      pathname,
+    );
+    if (req.method === "GET" && image) {
+      const [, w, h, r, g, b] = image;
+      res.writeHead(200, {
+        "Content-Type": "image/png",
+        "Content-Length": Buffer.from(
+          solidPng(Number(w), Number(h), [Number(r), Number(g), Number(b)]),
+          "base64",
+        ).length,
+      });
+      res.end(
+        Buffer.from(
+          solidPng(Number(w), Number(h), [Number(r), Number(g), Number(b)]),
+          "base64",
+        ),
+      );
+      return;
+    }
     if (
       req.method === "POST" &&
       (pathname === "/v1/images/generations" || pathname === "/v1/images/edits")
@@ -281,7 +330,12 @@ const server = http.createServer(async (req, res) => {
         : { fields: JSON.parse(body.toString("utf8") || "{}"), files: [] };
       const request = toImageRequest(fields);
       log(edit, request, files);
-      await handleImages(res, request, edit);
+      await handleImages(
+        res,
+        request,
+        edit,
+        `http://${req.headers.host ?? `localhost:${PORT}`}`,
+      );
       return;
     }
     sendError(res, 404, "not_found", `mock：未实现 ${req.method} ${pathname}`);
@@ -297,7 +351,7 @@ server.listen(PORT, () => {
     "在设置里把 API 地址填为上面的地址（会自动补 /v1），Key 随便填。",
   );
   console.log(
-    "描述里的标记：[401] [403] [429] [500] [policy] [stream-error] [slow] [json]",
+    "描述里的标记：[401] [403] [429] [500] [policy] [stream-error] [slow] [json] [url]",
   );
   console.log("只对某个尺寸生效：加 @宽x高，如 [429@1792x1008]");
 });

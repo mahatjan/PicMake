@@ -1,4 +1,5 @@
-/** OpenAI 兼容 API 客户端：响应恒为 b64_json，流式走 SSE；单次请求事务，无降级无重试 */
+/** OpenAI 兼容 API 客户端：图片为 b64_json，部分中转只给 url（下载后并入同一条管线）；
+ *  流式走 SSE；单次请求事务，无降级无重试 */
 import { createParser } from "eventsource-parser";
 import { apiUrl } from "../lib/url";
 import {
@@ -112,12 +113,29 @@ function bodyFields(
 
 /* ── 非流式生成 ── */
 
+/** 图片字段的两种形态：b64_json（官方）或 url（部分中转）。两者都在顶层或 data[] 里 */
+function imageParts(j: any): { b64: string[]; urls: string[] } {
+  const b64: string[] = [];
+  const urls: string[] = [];
+  const take = (d: any) => {
+    if (typeof d?.b64_json === "string" && d.b64_json) b64.push(d.b64_json);
+    else if (typeof d?.url === "string" && d.url) urls.push(d.url);
+  };
+  take(j);
+  if (Array.isArray(j?.data)) j.data.forEach(take);
+  return { b64, urls };
+}
+
+/** parseGenResponse 的结果：urls 还没下载，调用方要补齐 images */
+export interface ParsedResponse extends ImageRequestResult {
+  urls: string[];
+}
+
 /** 解析非流式响应体（普通请求与流式嗅探共用）；usage 原样保存 */
-export function parseGenResponse(j: any): ImageRequestResult {
-  const images: string[] = (j.data ?? []).map((d: any) => d.b64_json);
-  if (!images.length || images.some((b64) => typeof b64 !== "string" || !b64))
-    throw clientError("unknown", "no-image");
-  return { images, usage: j.usage ?? null };
+export function parseGenResponse(j: any): ParsedResponse {
+  const { b64, urls } = imageParts(j);
+  if (!b64.length && !urls.length) throw clientError("unknown", "no-image");
+  return { images: b64, urls, usage: j.usage ?? null };
 }
 
 /* ── 异步任务型中转（如 apimart）：恒回任务单，轮询 GET /tasks/{id} 到 completed 取图片 URL ── */
@@ -177,6 +195,11 @@ async function urlToB64(url: string, signal?: AbortSignal): Promise<string> {
     reader.readAsDataURL(blob);
   });
   return dataUrl.slice(dataUrl.indexOf(",") + 1);
+}
+
+/** url 形态的结果下载转 b64，才能与 b64 形态走同一条管线 */
+function downloadUrls(urls: string[], signal?: AbortSignal): Promise<string[]> {
+  return Promise.all(urls.map((u) => urlToB64(u, signal)));
 }
 
 /** 轮询任务到完成取图；保留请求级 usage */
@@ -246,10 +269,17 @@ export function editFormData(
   return form;
 }
 
-/** SSE 分帧包装：纯解析，支持两种端点和 event 字段。 */
+/** 预览事件：官方 image_generation.partial_image，中转可能是 image.generation.partial_image */
+const PARTIAL_TYPE = /^image[._](generation|edit)[._]partial_image$/;
+/** 终稿事件：官方 image_generation.completed，部分中转用 image.generation.result */
+const RESULT_TYPE = /^image[._](generation|edit)[._](completed|result)$/;
+
+/** SSE 分帧包装：纯解析。事件名兼容 type/event 与 object 两种来源，图片兼容 b64 与 url 两种形态；
+ *  url 只收集不下载（onEvent 是同步的），由调用方在流结束后统一取。 */
 export function createImageParser(
   handlers: StreamHandlers,
   result: ImageRequestResult,
+  urls: string[] = [],
 ) {
   return createParser({
     onEvent(ev) {
@@ -260,7 +290,7 @@ export function createImageParser(
       } catch {
         return;
       }
-      const type = d.type ?? ev.event;
+      const type = d.type ?? d.object ?? ev.event;
       if (type === "error" || d.error) {
         const error = d.error ?? d;
         const mapped = mapStatus(
@@ -273,13 +303,13 @@ export function createImageParser(
           mapped.detail = { code: "generation-failed" };
         throw mapped;
       }
-      if (/^image_(generation|edit)\.partial_image$/.test(type) && d.b64_json) {
-        handlers.onPartial?.(d.b64_json, d.partial_image_index ?? 0);
-      } else if (
-        /^image_(generation|edit)\.completed$/.test(type) &&
-        d.b64_json
-      ) {
-        result.images.push(d.b64_json);
+      const parts = imageParts(d);
+      if (PARTIAL_TYPE.test(type)) {
+        if (parts.b64.length)
+          handlers.onPartial?.(parts.b64[0], d.partial_image_index ?? 0);
+      } else if (RESULT_TYPE.test(type)) {
+        result.images.push(...parts.b64);
+        urls.push(...parts.urls);
         // usage 是请求级总量，后续完成事件的总量回显覆盖，绝不按图相加。
         if (d.usage) result.usage = d.usage;
       }
@@ -322,13 +352,20 @@ export async function requestImages(
   if ((res.headers.get("content-type") ?? "").includes("json")) {
     const j = await res.json();
     const taskId = extractTaskId(j);
-    return taskId
-      ? resolveTaskResult(taskId, config, handlers.signal)
-      : parseGenResponse(j);
+    if (taskId) return resolveTaskResult(taskId, config, handlers.signal);
+    const parsed = parseGenResponse(j);
+    return {
+      images: [
+        ...parsed.images,
+        ...(await downloadUrls(parsed.urls, handlers.signal)),
+      ],
+      usage: parsed.usage,
+    };
   }
   if (!res.body) throw clientError("unknown", "no-content");
   const result: ImageRequestResult = { images: [], usage: null };
-  const parser = createImageParser(handlers, result);
+  const urls: string[] = [];
+  const parser = createImageParser(handlers, result, urls);
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let streamError: unknown;
@@ -348,6 +385,9 @@ export async function requestImages(
   }
   handlers.signal?.throwIfAborted();
   if (streamError) throw streamError;
+  // url 形态的终稿在流结束后下载；中断时 fetch 直接 abort，不会留下半张图
+  if (urls.length)
+    result.images.push(...(await downloadUrls(urls, handlers.signal)));
   if (!result.images.length) throw clientError("unknown", "no-image");
   return result;
 }

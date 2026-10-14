@@ -54,7 +54,7 @@ Requests stream over SSE (`partial_images: 3`): a blurry preview appears on the 
 
 | Parameter  | Options                                                                                                                                                        |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Model      | Flare (fast) · Sunburst (detailed)                                                                                                                             |
+| Model      | Flare (fast) · Sunburst (detailed) · GPT Image 2                                                                                                               |
 | Ratio      | 1:1 · 4:3 · 3:4 · 3:2 · 2:3 · 16:9 · 9:16 · Auto; turn on Multiple ratios to pick 2–4 at once                                                                  |
 | Size       | 1K / 2K / 4K base resolution, or a custom width × height (multiple of 16, ratio between 1:3 and 3:1, long side ≤ 3840, short side ≤ 2160, checked as you type) |
 | Quality    | Low · Medium · High · Extra high · Max                                                                                                                         |
@@ -154,7 +154,7 @@ Run `pnpm exec playwright install chromium` once before your first `pnpm e2e`. I
 pnpm mock       # → http://localhost:8787
 ```
 
-Set the API URL to `http://localhost:8787` in settings; any key works. The mock returns solid-color PNGs at the requested size. Add markers to your prompt to simulate failures: `[401]`, `[403]`, `[429]`, `[500]` and `[policy]` return the matching errors, `[stream-error]` breaks the stream after the first preview, `[slow]` slows events down so you can test cancelling, and `[json]` returns a non-streaming JSON response. With multiple ratios each ratio is its own request, and a marker applies to all of them by default; add `@<width>x<height>` (e.g. `[429@1792x1008]`, `[slow@1792x1008]`) to target a single size, which is handy for testing partial failures and keeping finished images when you cancel.
+Set the API URL to `http://localhost:8787` in settings; any key works. The mock returns solid-color PNGs at the requested size. Add markers to your prompt to simulate failures: `[401]`, `[403]`, `[429]`, `[500]` and `[policy]` return the matching errors, `[stream-error]` breaks the stream after the first preview, `[slow]` slows events down so you can test cancelling, `[json]` returns a non-streaming JSON response, and `[url]` returns image URLs in `data[]` instead of base64 (simulating a relay that never sends base64, so the client has to download them). With multiple ratios each ratio is its own request, and a marker applies to all of them by default; add `@<width>x<height>` (e.g. `[429@1792x1008]`, `[slow@1792x1008]`) to target a single size, which is handy for testing partial failures and keeping finished images when you cancel.
 
 </details>
 
