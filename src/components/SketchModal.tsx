@@ -9,6 +9,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type PointerEvent,
 } from "react";
 import {
   Check,
@@ -56,6 +57,16 @@ interface PaperBox {
 
 const SLIDER_TRACK = 168; // 滑杆可拖长度 = 184 - 上下 8px
 
+/** 窄屏原生取色窗会贴底被裁切；iOS Safari 不弹出系统取色窗。这两种用画板内的取色板。 */
+function wantsCustomColorPicker(): boolean {
+  if (typeof window === "undefined") return false;
+  const ua = navigator.userAgent;
+  const ios =
+    /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  return ios || window.matchMedia("(max-width: 700px)").matches;
+}
+
 export function SketchModal(props: {
   doc: SketchDocument;
   cursor: number;
@@ -91,6 +102,10 @@ export function SketchModal(props: {
   const [sizeT, setSizeT] = useState(0.35);
   const [box, setBox] = useState<PaperBox | null>(null);
   const [hasInk, setHasInk] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [useCustom, setUseCustom] = useState(wantsCustomColorPicker);
+  const colorsRef = useRef<HTMLDivElement>(null);
+  const [pickerBottom, setPickerBottom] = useState(128);
 
   /* ── 画布适配：contain 完整容纳，避开四周浮动控件，不裁切不拉伸 ── */
   useLayoutEffect(() => {
@@ -126,6 +141,29 @@ export function SketchModal(props: {
     ro.observe(zone);
     return () => ro.disconnect();
   }, [doc.width, doc.height]);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 700px)");
+    const update = () => setUseCustom(wantsCustomColorPicker());
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!useCustom) return;
+    const el = colorsRef.current;
+    const board = el?.offsetParent;
+    if (!el || !(board instanceof HTMLElement)) return;
+    const place = () => {
+      setPickerBottom(board.clientHeight - el.offsetTop + 10);
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    ro.observe(el);
+    ro.observe(board);
+    return () => ro.disconnect();
+  }, [useCustom, box, pickerOpen]);
 
   const replayToCanvas = useCallback(() => {
     const cv = canvasRef.current;
@@ -424,33 +462,62 @@ export function SketchModal(props: {
             />
           </div>
 
+          {useCustom && pickerOpen && (
+            <SketchColorPad
+              hex={colorHex}
+              bottom={pickerBottom}
+              onChange={(hex) => {
+                setColorIdx(-1);
+                setColorHex(hex);
+              }}
+            />
+          )}
           <div
+            ref={colorsRef}
             className="pm-sk-colors"
             role="group"
             aria-label={t("sketch.colors")}
           >
-            {/* 原生取色输入保留 1px 布局盒（display:none 会让取色窗弹到视口左上角） */}
-            <input
-              ref={customColorRef}
-              type="color"
-              className="pm-sk-custom-input"
-              tabIndex={-1}
-              aria-hidden="true"
-              onChange={(e) => {
-                setColorIdx(-1);
-                setColorHex(e.target.value);
-              }}
-            />
-            <button
-              type="button"
-              className="pm-sk-sw rainbow"
-              aria-label={t("sketch.customColor")}
-              aria-pressed={colorIdx === -1}
-              onClick={() => {
-                setTool("pen");
-                customColorRef.current?.click();
-              }}
-            />
+            {useCustom ? (
+              <button
+                type="button"
+                className={
+                  "pm-sk-sw rainbow" +
+                  (colorIdx === -1 || pickerOpen ? " on" : "")
+                }
+                aria-label={t("sketch.customColor")}
+                aria-pressed={colorIdx === -1 || pickerOpen}
+                onClick={() => {
+                  setTool("pen");
+                  setPickerOpen((open) => !open);
+                }}
+              />
+            ) : (
+              <span className="pm-sk-custom">
+                {/* 盖住彩虹按钮，取色窗从这颗按钮旁弹出。display:none 会弹到视口左上角。 */}
+                <input
+                  ref={customColorRef}
+                  type="color"
+                  className="pm-sk-custom-input"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  onChange={(e) => {
+                    setColorIdx(-1);
+                    setColorHex(e.target.value);
+                  }}
+                />
+                <button
+                  type="button"
+                  className="pm-sk-sw rainbow"
+                  aria-label={t("sketch.customColor")}
+                  aria-pressed={colorIdx === -1}
+                  onClick={() => {
+                    setTool("pen");
+                    customColorRef.current?.click();
+                  }}
+                />
+              </span>
+            )}
             {SKETCH_PALETTE.map((c, i) => (
               <button
                 key={c.hex}
@@ -464,6 +531,7 @@ export function SketchModal(props: {
                 aria-pressed={colorIdx === i}
                 onClick={() => {
                   setTool("pen");
+                  setPickerOpen(false);
                   setColorIdx(i);
                   setColorHex(c.hex);
                 }}
@@ -491,4 +559,109 @@ export function SketchModal(props: {
       </div>
     </FocusScope>
   );
+}
+
+function SketchColorPad(props: {
+  hex: string;
+  bottom: number;
+  onChange: (hex: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [hsv, setHsv] = useState(() => hexToHsv(props.hex));
+  const apply = (h: number, s: number, v: number) => {
+    setHsv({ h, s, v });
+    props.onChange(hsvToHex(h, s, v));
+  };
+  const pick = (event: PointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const s = clamp01((event.clientX - rect.left) / rect.width);
+    const v = clamp01(1 - (event.clientY - rect.top) / rect.height);
+    apply(hsv.h, s, v);
+  };
+  return (
+    <div
+      className="pm-sk-picker"
+      style={{ bottom: props.bottom }}
+      role="group"
+      aria-label={t("sketch.customColor")}
+    >
+      <div
+        className="pm-sk-sv"
+        role="group"
+        aria-label={t("sketch.shade")}
+        style={{ backgroundColor: `hsl(${hsv.h} 100% 50%)` }}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          pick(event);
+        }}
+        onPointerMove={(event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId))
+            pick(event);
+        }}
+      >
+        <i style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }} />
+      </div>
+      <input
+        className="pm-sk-hue"
+        type="range"
+        min={0}
+        max={360}
+        step={1}
+        value={Math.round(hsv.h)}
+        aria-label={t("sketch.hue")}
+        onChange={(event) => apply(Number(event.target.value), hsv.s, hsv.v)}
+      />
+    </div>
+  );
+}
+
+function clamp01(n: number): number {
+  return Math.min(1, Math.max(0, n));
+}
+
+function hexToHsv(hex: string): { h: number; s: number; v: number } {
+  const raw = hex.replace("#", "");
+  const full =
+    raw.length === 3
+      ? raw
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : raw.slice(0, 6);
+  const n = Number.parseInt(full, 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return { h, s: max === 0 ? 0 : d / max, v: max };
+}
+
+function hsvToHex(h: number, s: number, v: number): string {
+  const c = v * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = v - c;
+  let rp = 0;
+  let gp = 0;
+  let bp = 0;
+  if (h < 60) [rp, gp, bp] = [c, x, 0];
+  else if (h < 120) [rp, gp, bp] = [x, c, 0];
+  else if (h < 180) [rp, gp, bp] = [0, c, x];
+  else if (h < 240) [rp, gp, bp] = [0, x, c];
+  else if (h < 300) [rp, gp, bp] = [x, 0, c];
+  else [rp, gp, bp] = [c, 0, x];
+  const byte = (n: number) =>
+    Math.round((n + m) * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${byte(rp)}${byte(gp)}${byte(bp)}`;
 }

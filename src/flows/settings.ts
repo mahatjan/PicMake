@@ -6,8 +6,14 @@ import { useSettings } from "../store/settings";
 import { closeSettings } from "../store/workspace/actions";
 
 /** 保存设置（有 apiKey 即视为已引导，启动弹窗由它决定） */
-export function saveSettings(baseUrl: string, apiKey: string) {
-  useSettings.getState().setApi(baseUrl, apiKey);
+export function saveSettings(
+  baseUrl: string,
+  apiKey: string,
+  videoApiKey: string,
+) {
+  const settings = useSettings.getState();
+  settings.setApi(baseUrl, apiKey);
+  settings.setVideoApiKey(videoApiKey);
   closeSettings();
   toast(t("toast.settingsSaved"));
 }

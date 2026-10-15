@@ -46,6 +46,11 @@ export function canOpenDrawing(s: {
   return s.run === "idle" && !s.reading && !s.confirming && !s.drawing;
 }
 
+/** 视频工作台：画板打开时不进入，避免两层编辑叠在一起 */
+export function canOpenPlayground(s: { drawing: boolean }): boolean {
+  return !s.drawing;
+}
+
 /** 画板打开以来是否有修改：撤销回打开时的状态视为没有修改。
  *  会序列化全部已提交命令，只在请求关闭画板时调用，不要放进 selector 或渲染路径 */
 export function isDrawingChanged(d: {

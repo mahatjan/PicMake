@@ -11,6 +11,7 @@ import { Carousel } from "../components/overlays/Carousel";
 import { Lightbox } from "../components/overlays/Lightbox";
 import { Stage } from "../components/Stage";
 import { copyPrompt, downloadAll, downloadImage } from "../flows/export";
+import { openVideoFromImage } from "../flows/video";
 import {
   adjustFromViewMask,
   openViewMask,
@@ -170,6 +171,7 @@ export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
           onCopyPrompt={() => copyPrompt(display.row.prompt)}
           onReuse={() => reuseParams(display.row.id)}
           onEdit={editImage}
+          onToVideo={(id) => void openVideoFromImage(id)}
           onInpaint={startInpaintFromResult}
           onViewMask={display.row.inpaint ? openViewMask : undefined}
           onAdjustInpaint={

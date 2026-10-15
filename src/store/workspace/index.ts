@@ -19,6 +19,15 @@ import type {
   UploadIssue,
 } from "../../lib/types";
 import type { ConfirmState, GenPlan, InputNaming } from "../../lib/view-models";
+import {
+  FRAME_WORKFLOW_ID,
+  getVideoWorkflow,
+  resolutionOptions,
+  VIDEO_DEFAULT_WORKFLOW,
+  type VideoEntry,
+  type VideoInputMode,
+  type VideoRecord,
+} from "../../lib/video";
 
 /** 多尺寸生成中的一个请求（一个比例一格）：各自的阶段、渐进预览、终稿与失败原因 */
 export interface RunSlot {
@@ -92,6 +101,32 @@ export interface ViewMask {
   rowId: string;
 }
 
+/** 视频表单里的一张本地图。Object URL 不进 store */
+export interface VideoImageDraft {
+  id: string;
+  blob: Blob;
+  name: string;
+}
+
+/** 视频表单草稿：只活在本次会话，刷新即丢 */
+export interface VideoDraft {
+  /** null = 表单关闭 */
+  entry: VideoEntry | null;
+  refWorkflowId: string;
+  customWorkflowId: string;
+  customInput: VideoInputMode;
+  prompt: string;
+  duration: string;
+  resolution: string;
+  /** 各工作流上次选过的分辨率 */
+  resolutions: Record<string, string>;
+  /** 各工作流手填的 seed；没有这个 key 表示还没改过，界面显示默认值 */
+  seeds: Record<string, string>;
+  customResolution: string;
+  refs: VideoImageDraft[];
+  frames: { first: VideoImageDraft | null; last: VideoImageDraft | null };
+}
+
 export interface WorkspaceState {
   history: {
     /** 只由 liveQuery 订阅（flows/history-sync）写入；null 表示尚未加载 */
@@ -134,37 +169,73 @@ export interface WorkspaceState {
     lightboxId: string | null;
     drawerOpen: boolean;
     settingsOpen: boolean;
+    /** 视频工作台盖住舞台和创作条 */
+    playgroundOpen: boolean;
     viewMask: ViewMask | null;
+  };
+  /** 视频工作台：记录由 liveQuery 回推；草稿与提交锁只在会话内 */
+  video: {
+    rows: VideoRecord[] | null;
+    submitting: boolean;
+    previewId: string | null;
+    draft: VideoDraft;
   };
   confirm: ConfirmState | null;
 }
 
-export const initialWorkspace = (): WorkspaceState => ({
-  history: { rows: null, recent: null },
-  run: { phase: "idle" },
-  draft: {
-    form: DEFAULT_FORM,
-    inputs: [],
-    inpaint: null,
-    sizeAccepted: false,
-    inputFidelity: "auto",
-    dirty: false,
-    readId: null,
-    uploadIssues: [],
-  },
-  nav: { selectedId: null, returnId: null, lastDoneId: null },
-  drawing: null,
-  view: {
-    barMode: "mini",
-    focusSeq: 0,
-    previewId: null,
-    focusIdx: null,
-    lightboxId: null,
-    drawerOpen: false,
-    settingsOpen: false,
-    viewMask: null,
-  },
-  confirm: null,
-});
+export const initialWorkspace = (): WorkspaceState => {
+  const resolution = resolutionOptions({
+    entry: "ref",
+    workflowId: VIDEO_DEFAULT_WORKFLOW,
+  })[0];
+  return {
+    history: { rows: null, recent: null },
+    run: { phase: "idle" },
+    draft: {
+      form: DEFAULT_FORM,
+      inputs: [],
+      inpaint: null,
+      sizeAccepted: false,
+      inputFidelity: "auto",
+      dirty: false,
+      readId: null,
+      uploadIssues: [],
+    },
+    nav: { selectedId: null, returnId: null, lastDoneId: null },
+    drawing: null,
+    view: {
+      barMode: "mini",
+      focusSeq: 0,
+      previewId: null,
+      focusIdx: null,
+      lightboxId: null,
+      drawerOpen: false,
+      settingsOpen: false,
+      playgroundOpen: false,
+      viewMask: null,
+    },
+    video: {
+      rows: null,
+      submitting: false,
+      previewId: null,
+      draft: {
+        entry: null,
+        refWorkflowId: VIDEO_DEFAULT_WORKFLOW,
+        customWorkflowId: "",
+        customInput: "refs",
+        prompt: "",
+        duration: "5",
+        resolution,
+        resolutions: {},
+        seeds: {},
+        customResolution:
+          getVideoWorkflow(FRAME_WORKFLOW_ID)?.defaultResolution ?? resolution,
+        refs: [],
+        frames: { first: null, last: null },
+      },
+    },
+    confirm: null,
+  };
+};
 
 export const useWorkspace = create<WorkspaceState>()(initialWorkspace);

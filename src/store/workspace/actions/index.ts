@@ -5,3 +5,4 @@ export * from "./run";
 export * from "./drawing";
 export * from "./nav";
 export * from "./view";
+export * from "./video";

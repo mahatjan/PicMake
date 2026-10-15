@@ -1,0 +1,694 @@
+/* 视频工作台盖住舞台和创作条，留在顶栏下面。
+   表单和预览盖过顶栏；设置和确认弹层仍可盖上来。 */
+
+.pm-playground {
+  position: fixed;
+  z-index: 16;
+  inset: 0;
+  overflow: auto;
+  background: var(--pm-bg);
+  color: var(--pm-text-1);
+  padding: calc(64px + env(safe-area-inset-top, 0px)) 16px
+    calc(28px + env(safe-area-inset-bottom, 0px));
+}
+
+.pm-playground-inner {
+  width: min(100%, 720px);
+  margin: 0 auto;
+}
+
+.pm-playground-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.pm-playground-head h1,
+.pm-playground-head h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+}
+
+.pm-playground-head button,
+.pm-video-history-head button {
+  border: 1px solid var(--pm-line);
+  background: var(--pm-fill);
+  color: var(--pm-text-2);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.pm-playground-head button:hover,
+.pm-video-history-head button:hover {
+  color: var(--pm-text-1);
+  background: var(--pm-fill-hover);
+}
+
+.pm-playground-head button:focus-visible,
+.pm-video-history-head button:focus-visible {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 2px;
+}
+
+.pm-video-grid,
+.pm-video-history {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.pm-video-card {
+  min-height: 88px;
+  padding: 16px;
+  text-align: left;
+  border: none;
+  border-radius: 16px;
+  background: var(--pm-fill);
+  color: var(--pm-text-1);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.pm-video-card:hover,
+.pm-video-card:focus-visible {
+  background: var(--pm-fill-hover);
+}
+
+.pm-video-history-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 26px 0 12px;
+}
+
+.pm-video-history-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.pm-video-empty {
+  min-height: 140px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--pm-line-2);
+  border-radius: 14px;
+  color: var(--pm-text-3);
+}
+
+.pm-video-tile {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: none;
+  border-radius: 16px;
+  overflow: hidden;
+  aspect-ratio: 3 / 4;
+  background: #111;
+  color: #fff;
+  text-align: left;
+}
+
+.pm-video-tile img,
+.pm-video-tile-empty {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: var(--pm-fill-active);
+}
+
+.pm-video-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+}
+
+.pm-video-badge.error {
+  background: var(--pm-error);
+}
+
+.pm-video-tile-meta {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 28px 10px 10px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
+  color: #fff;
+  font-size: 12px;
+}
+
+.pm-video-tile-meta b {
+  font-weight: 600;
+}
+
+.pm-video-tile-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-video-tile-meta .err {
+  color: #ffd0c6;
+}
+
+/* 表单和预览：居中卡片，盖过顶栏；设置和确认框仍用 HeroUI 更高的层 */
+.pm-video-sheet {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--pm-scrim);
+  padding: calc(24px + env(safe-area-inset-top, 0px))
+    calc(16px + env(safe-area-inset-right, 0px))
+    calc(24px + env(safe-area-inset-bottom, 0px))
+    calc(16px + env(safe-area-inset-left, 0px));
+}
+
+.pm-video-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 520px);
+  max-height: 100%;
+  overflow: hidden;
+  background: var(--pm-panel-solid);
+  color: var(--pm-text-1);
+  border: 1px solid var(--pm-line);
+  border-radius: 16px;
+  box-shadow: var(--pm-shadow-lg);
+}
+
+.pm-video-head,
+.pm-video-foot {
+  flex: none;
+  padding: 14px 16px;
+}
+
+.pm-video-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border-bottom: 1px solid var(--pm-line);
+}
+
+.pm-video-head-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.pm-video-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.pm-video-head p {
+  margin: 2px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--pm-text-3);
+}
+
+.pm-video-x {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--pm-text-2);
+}
+
+.pm-video-x:hover {
+  background: var(--pm-fill-hover);
+  color: var(--pm-text-1);
+}
+
+.pm-video-x:focus-visible,
+.pm-video-thumb-x:focus-visible,
+.pm-ref-add:focus-visible,
+.pm-frame-well > button:focus-visible,
+.pm-ref-head button:focus-visible,
+.pm-video-submit:focus-visible,
+.pm-video-actions button:focus-visible {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 2px;
+}
+
+.pm-video-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 16px 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pm-scrollbar) transparent;
+}
+
+.pm-video-foot {
+  border-top: 1px solid var(--pm-line);
+}
+
+.pm-video-label {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--pm-text-2);
+}
+
+.pm-video-body > .pm-video-label {
+  margin-top: 16px;
+}
+
+.pm-video-text,
+.pm-video-input {
+  width: 100%;
+  border: 1px solid var(--pm-line);
+  border-radius: 10px;
+  background: var(--pm-fill);
+  color: var(--pm-text-1);
+  font: inherit;
+  font-size: 14px;
+}
+
+.pm-video-text {
+  display: block;
+  min-height: 112px;
+  max-height: 220px;
+  resize: vertical;
+  padding: 10px 12px;
+  line-height: 1.5;
+}
+
+.pm-video-text::placeholder,
+.pm-video-input::placeholder {
+  color: var(--pm-text-3);
+}
+
+.pm-video-input {
+  height: 40px;
+  padding: 0 12px;
+}
+
+.pm-video-text:focus,
+.pm-video-input:focus {
+  outline: none;
+  border-color: var(--pm-accent-border);
+  box-shadow: 0 0 0 3px var(--pm-accent-soft);
+}
+
+.pm-video-select {
+  position: relative;
+}
+
+.pm-video-select .pm-video-input {
+  appearance: none;
+  padding-right: 34px;
+}
+
+.pm-video-select svg {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  color: var(--pm-text-3);
+  pointer-events: none;
+}
+
+.pm-video-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.pm-video-fields > * {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pm-video-fields .pm-video-input,
+.pm-video-fields .pm-video-select {
+  margin-top: auto;
+}
+
+.pm-video-span {
+  grid-column: 1 / -1;
+}
+
+.pm-video-count,
+.pm-video-error,
+.pm-video-prompt {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+
+.pm-video-count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.pm-video-error {
+  color: var(--pm-error);
+}
+
+.pm-video-prompt {
+  color: var(--pm-text-1);
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.pm-ref-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pm-ref-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--pm-text-2);
+}
+
+.pm-ref-head span:nth-child(2) {
+  color: var(--pm-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.pm-ref-head button {
+  margin-left: auto;
+  font: inherit;
+  font-size: 12px;
+  color: var(--pm-text-3);
+}
+
+.pm-ref-head button:hover {
+  color: var(--pm-text-1);
+}
+
+.pm-ref-row,
+.pm-frame-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pm-frame-row {
+  align-items: stretch;
+}
+
+.pm-frame-slot {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pm-frame-slot > span {
+  font-size: 12px;
+  color: var(--pm-text-2);
+}
+
+.pm-frame-well {
+  position: relative;
+}
+
+.pm-frame-well > button,
+.pm-ref-add,
+.pm-ref-row figure {
+  position: relative;
+  border: 1px dashed var(--pm-line-2);
+  border-radius: 12px;
+  background: var(--pm-fill);
+  color: var(--pm-text-3);
+}
+
+.pm-frame-well > button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 132px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.pm-frame-well > button:hover,
+.pm-ref-add:hover {
+  border-color: var(--pm-accent-border);
+  color: var(--pm-text-1);
+  background: var(--pm-accent-soft);
+}
+
+.pm-ref-row figure,
+.pm-ref-add {
+  width: 88px;
+  height: 88px;
+  margin: 0;
+  overflow: hidden;
+}
+
+.pm-ref-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.pm-ref-add.wide {
+  flex: 1 0 100%;
+  width: 100%;
+  height: 88px;
+  flex-direction: row;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.pm-frame-well img,
+.pm-ref-row img,
+.pm-ref-row figure > span {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: var(--pm-fill-active);
+}
+
+.pm-frame-well > button:has(img) img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pm-frame-well > button:has(img) {
+  padding: 0;
+  border-style: solid;
+  border-color: var(--pm-line);
+  overflow: hidden;
+}
+
+.pm-video-thumb-x {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  z-index: 1;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+}
+
+.pm-video-thumb-x:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.pm-video-submit {
+  width: 100%;
+  height: 40px;
+  border: none;
+  border-radius: 10px;
+  background: var(--pm-accent);
+  color: var(--pm-accent-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pm-video-submit:hover:not(:disabled) {
+  background: var(--pm-accent-hover);
+}
+
+.pm-video-submit:disabled {
+  opacity: 0.55;
+}
+
+.pm-video-stage {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #111;
+  border: 1px solid var(--pm-line);
+}
+
+.pm-video-stage video,
+.pm-video-stage img {
+  width: 100%;
+  max-height: min(52dvh, 420px);
+  object-fit: contain;
+  background: #111;
+}
+
+.pm-video-stage p {
+  margin: 0;
+  color: #fff;
+  font-size: 13px;
+}
+
+.pm-video-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.pm-video-actions button {
+  min-height: 36px;
+  border: 1px solid var(--pm-line);
+  border-radius: 10px;
+  background: var(--pm-fill);
+  color: var(--pm-text-2);
+  font: inherit;
+  font-size: 13px;
+}
+
+.pm-video-actions button:hover:not(:disabled) {
+  color: var(--pm-text-1);
+  background: var(--pm-fill-hover);
+}
+
+.pm-video-actions button:disabled {
+  opacity: 0.45;
+}
+
+.pm-video-actions button.danger {
+  color: var(--pm-error);
+}
+
+.pm-detail-video {
+  width: 100%;
+  height: 29px;
+  margin-top: 5px;
+  border-radius: 7px;
+  background: var(--pm-fill);
+  border: 1px solid var(--pm-line);
+  color: var(--pm-text-2);
+  font-size: 11.5px;
+}
+
+.pm-detail-video:hover:not(:disabled) {
+  color: var(--pm-text-1);
+  border-color: var(--pm-line-2);
+}
+
+@media (max-width: 760px) {
+  .pm-video-grid,
+  .pm-video-history {
+    grid-template-columns: 1fr;
+  }
+
+  .pm-video-sheet {
+    padding: 0;
+    place-items: stretch;
+  }
+
+  .pm-video-panel {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .pm-video-head {
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+  }
+
+  .pm-video-foot {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .pm-video-x {
+    width: 44px;
+    height: 44px;
+  }
+
+  .pm-video-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .pm-video-text,
+  .pm-video-input {
+    font-size: 16px;
+  }
+
+  .pm-video-input,
+  .pm-video-submit,
+  .pm-video-actions button {
+    min-height: 44px;
+  }
+
+  .pm-frame-well > button {
+    min-height: 148px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-video-text,
+  .pm-video-input,
+  .pm-video-x,
+  .pm-ref-add,
+  .pm-video-submit {
+    transition: none;
+  }
+}

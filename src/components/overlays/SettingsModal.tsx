@@ -37,6 +37,7 @@ export function SettingsModal(props: {
   open: boolean;
   baseUrl: string;
   apiKey: string;
+  videoApiKey: string;
   /** 本机存储统计：记录数、图片数、已用字节（浏览器不支持估算时为 null） */
   storage: { generations: number; images: number; usageBytes: number | null };
   theme: ThemePref;
@@ -44,12 +45,13 @@ export function SettingsModal(props: {
   locale: LocalePref;
   onLocaleChange: (locale: LocalePref) => void;
   onTest: TestConn;
-  onSave: (baseUrl: string, apiKey: string) => void;
+  onSave: (baseUrl: string, apiKey: string, videoApiKey: string) => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const [baseUrl, setBaseUrl] = useState(props.baseUrl);
   const [apiKey, setApiKey] = useState(props.apiKey);
+  const [videoApiKey, setVideoApiKey] = useState(props.videoApiKey);
   const [testing, setTesting] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
@@ -134,6 +136,15 @@ export function SettingsModal(props: {
               </p>
             )}
             <p className="pm-hint">{t("settings.keyHint")}</p>
+            <label htmlFor="s-video-key">{t("settings.videoKey")}</label>
+            <Input
+              id="s-video-key"
+              type="password"
+              autoComplete="off"
+              value={videoApiKey}
+              onChange={(e) => setVideoApiKey(e.target.value)}
+            />
+            <p className="pm-hint">{t("settings.videoKeyHint")}</p>
             <p className="pm-hint">{storageText}</p>
             <div className="pm-mbtns">
               <Button
@@ -162,7 +173,7 @@ export function SettingsModal(props: {
               </Button>
               <Button
                 variant="primary"
-                onPress={() => props.onSave(baseUrl, apiKey)}
+                onPress={() => props.onSave(baseUrl, apiKey, videoApiKey)}
               >
                 {t("common.save")}
               </Button>

@@ -251,14 +251,16 @@
   opacity: 1;
 }
 
-/* 底部色板（首个彩虹圈 = 自定义取色；选中环用品牌强调色） */
+/* 底部色板（首个彩虹圈 = 自定义取色；选中环用品牌强调色）。
+   用 auto margin 居中，不用 transform：祖先有 transform 时，原生取色窗会锚错位置。 */
 .pm-sk-colors {
   position: absolute;
   bottom: 22px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
   width: max-content;
   max-width: calc(100% - 200px);
+  margin-inline: auto;
   display: flex;
   gap: 12px;
   align-items: center;
@@ -298,17 +300,96 @@
     #e53935
   );
 }
-/* 原生取色输入：绝对定位不占 flex 布局，取色窗跟随锚点而非弹到视口左上角 */
+/* 取色输入盖在彩虹按钮上，取色窗从这颗按钮旁弹出，而不是画布中间。
+   祖先不能有 transform，否则原生取色窗会锚错。 */
+.pm-sk-custom {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex: none;
+}
+.pm-sk-custom .pm-sk-sw {
+  width: 100%;
+  height: 100%;
+}
 .pm-sk-custom-input {
   position: absolute;
-  left: 0;
-  bottom: 8px;
-  width: 1px;
-  height: 1px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
   opacity: 0;
   pointer-events: none;
-  border: none;
-  padding: 0;
+}
+
+/* 窄屏 / iOS：画板内取色板，贴在色点上方，不依赖会被裁切的系统弹层 */
+.pm-sk-picker {
+  position: absolute;
+  z-index: 7;
+  left: 50%;
+  width: min(320px, calc(100% - 24px));
+  transform: translateX(-50%);
+  padding: 10px;
+  border-radius: 14px;
+  background: var(--pm-sketch-paper);
+  border: 1px solid var(--pm-sketch-line);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+}
+.pm-sk-sv {
+  position: relative;
+  height: 148px;
+  border-radius: 10px;
+  touch-action: none;
+  background-image:
+    linear-gradient(to top, #000, transparent),
+    linear-gradient(to right, #fff, transparent);
+}
+.pm-sk-sv i {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.pm-sk-hue {
+  display: block;
+  width: 100%;
+  height: 18px;
+  margin-top: 10px;
+  appearance: none;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    #f00,
+    #ff0,
+    #0f0,
+    #0ff,
+    #00f,
+    #f0f,
+    #f00
+  );
+}
+.pm-sk-hue::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.pm-sk-hue::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  border-radius: 50%;
+  background: #fff;
 }
 
 /* 右下确认 FAB：空白灰禁用 → 有墨淡橙 → hover 实心强调 */
@@ -389,6 +470,10 @@
     gap: 8px;
     max-width: calc(100% - 150px);
   }
+  .pm-sk-custom {
+    width: 26px;
+    height: 26px;
+  }
   .pm-sk-sw {
     width: 26px;
     height: 26px;
@@ -418,5 +503,11 @@
   }
   .pm-sk-meta {
     display: none;
+  }
+  .pm-sk-sv {
+    height: 120px;
+  }
+  .pm-sk-hue {
+    height: 28px;
   }
 }

@@ -13,3 +13,18 @@ export function b64Format(b64: string): string | null {
   const head = atob(b64.slice(0, 16));
   return imageFormat(Uint8Array.from(head, (ch) => ch.charCodeAt(0)));
 }
+
+/** Blob → data URI。分块拼接，避免一次展开大数组撑爆调用栈 */
+export async function blobToDataUrl(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    const slice = bytes.subarray(i, i + chunk);
+    let part = "";
+    for (let j = 0; j < slice.length; j++)
+      part += String.fromCharCode(slice[j]);
+    binary += part;
+  }
+  return `data:${blob.type || "application/octet-stream"};base64,${btoa(binary)}`;
+}

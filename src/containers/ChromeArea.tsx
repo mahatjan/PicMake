@@ -7,12 +7,15 @@ import { saveSettings, testConnection } from "../flows/settings";
 import { selectHistory, toggleStar } from "../flows/navigation";
 import { useTheme } from "../hooks/useTheme";
 import type { WorkspaceAssets } from "../hooks/useWorkspaceAssets";
+import { canOpenPlayground } from "../lib/workspace-rules";
 import { useSettings } from "../store/settings";
 import { useWorkspace } from "../store/workspace";
 import {
   closeDrawer,
+  closePlayground,
   closeSettings,
   openDrawer,
+  openPlayground,
   openSettings,
 } from "../store/workspace/actions";
 
@@ -21,10 +24,13 @@ export function ChromeArea({ assets }: { assets: WorkspaceAssets }) {
   const theme = useTheme();
   const baseUrl = useSettings((s) => s.baseUrl);
   const apiKey = useSettings((s) => s.apiKey);
+  const videoApiKey = useSettings((s) => s.videoApiKey);
   const locale = useSettings((s) => s.locale);
   const setLocale = useSettings((s) => s.setLocale);
   const drawerOpen = useWorkspace((s) => s.view.drawerOpen);
   const settingsOpen = useWorkspace((s) => s.view.settingsOpen);
+  const playgroundOpen = useWorkspace((s) => s.view.playgroundOpen);
+  const drawing = useWorkspace((s) => s.drawing !== null);
 
   const [usageBytes, setUsageBytes] = useState<number | null>(null);
   useEffect(() => {
@@ -41,6 +47,9 @@ export function ChromeArea({ assets }: { assets: WorkspaceAssets }) {
         onToggleTheme={theme.toggle}
         onHistory={openDrawer}
         onSettings={openSettings}
+        videoOpen={playgroundOpen}
+        canOpenVideo={canOpenPlayground({ drawing })}
+        onVideo={() => (playgroundOpen ? closePlayground() : openPlayground())}
       />
 
       <HistoryDrawer
@@ -61,6 +70,7 @@ export function ChromeArea({ assets }: { assets: WorkspaceAssets }) {
         open={settingsOpen}
         baseUrl={baseUrl}
         apiKey={apiKey}
+        videoApiKey={videoApiKey}
         storage={{
           generations: rows.length,
           images: totalImages,

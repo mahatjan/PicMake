@@ -3,6 +3,7 @@ import { DEFAULT_FORM, type GenForm } from "./params";
 import type { InpaintDraft, SketchCommand } from "./types";
 import {
   canOpenDrawing,
+  canOpenPlayground,
   canWheelSwitch,
   draftToParams,
   hasUserWork,
@@ -47,6 +48,13 @@ describe("leaveDecision", () => {
     expect(decide("idle", true, true)).toBe("confirm-draft");
     expect(decide("idle", false)).toBe("ok");
     expect(decide("idle", false, true)).toBe("ok");
+  });
+});
+
+describe("canOpenPlayground", () => {
+  it("画板打开时不能进入视频工作台", () => {
+    expect(canOpenPlayground({ drawing: false })).toBe(true);
+    expect(canOpenPlayground({ drawing: true })).toBe(false);
   });
 });
 

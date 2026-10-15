@@ -70,6 +70,7 @@ export const selectCanWheelSwitch = (s: WorkspaceState) =>
     overlayOpen:
       s.view.settingsOpen ||
       s.view.drawerOpen ||
+      s.view.playgroundOpen ||
       s.view.lightboxId !== null ||
       s.view.viewMask !== null ||
       s.view.focusIdx !== null,

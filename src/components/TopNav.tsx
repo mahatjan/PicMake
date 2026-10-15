@@ -1,7 +1,7 @@
 /** 顶左浮岛：品牌 / 主题切换 / 历史 / 设置 */
 import { useTranslation } from "react-i18next";
 import { Button } from "@heroui/react";
-import { Menu, Moon, Settings, Sun } from "lucide-react";
+import { Clapperboard, Menu, Moon, Settings, Sun } from "lucide-react";
 import type { ResolvedTheme } from "../lib/theme";
 
 export function TopNav(props: {
@@ -9,6 +9,9 @@ export function TopNav(props: {
   onToggleTheme: () => void;
   onHistory: () => void;
   onSettings: () => void;
+  videoOpen: boolean;
+  canOpenVideo: boolean;
+  onVideo: () => void;
 }) {
   const { t } = useTranslation();
   const dark = props.theme === "dark";
@@ -41,6 +44,17 @@ export function TopNav(props: {
         onPress={props.onHistory}
       >
         <Menu size={15} />
+      </Button>
+      <Button
+        variant="ghost"
+        isIconOnly
+        size="sm"
+        aria-label={props.videoOpen ? t("nav.videoClose") : t("nav.video")}
+        aria-pressed={props.videoOpen}
+        isDisabled={!props.canOpenVideo && !props.videoOpen}
+        onPress={props.onVideo}
+      >
+        <Clapperboard size={15} />
       </Button>
       <Button
         variant="ghost"

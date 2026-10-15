@@ -7,6 +7,7 @@ import type {
   SketchDocument,
   InpaintHistory,
 } from "../lib/types";
+import type { VideoRecord } from "../lib/video";
 
 export interface ImageRow {
   id: string;
@@ -41,14 +42,23 @@ export interface HistoryRow {
   durationMs: number;
 }
 
+export type VideoRow = VideoRecord;
+
 export const db = new Dexie("PicMake") as Dexie & {
   images: EntityTable<ImageRow, "id">;
   history: EntityTable<HistoryRow, "id">;
+  videos: EntityTable<VideoRow, "id">;
 };
 
 db.version(1).stores({
   images: "id",
   history: "id, createdAt",
+});
+
+db.version(2).stores({
+  images: "id",
+  history: "id, createdAt",
+  videos: "id, createdAt, status",
 });
 
 /** 启动时申请持久化存储，降低浏览器自动清理 IndexedDB 的风险 */
