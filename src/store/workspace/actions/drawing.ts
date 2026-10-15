@@ -13,7 +13,7 @@ import {
   type SketchOrigin,
 } from "../../../lib/types";
 import type { InputNaming } from "../../../lib/view-models";
-import { useWorkspace } from "../index";
+import { useWorkspace, type WorkspaceState } from "../index";
 import { set, freshDraft, withInpaint, type InpaintPayload } from "./internal";
 
 /** 打开草图画板：新建、编辑附件（replacesImageId）或继续历史草图；已有画板时忽略并返回 false */
@@ -75,24 +75,36 @@ export function openInpaint(
   return true;
 }
 
-/** 提交一笔（或清空）：丢弃重做分支，超过上限静默拒绝；重绘同时清除就地错误 */
-export const strokeDrawing = (command: SketchCommand | MaskCommand) =>
-  set((s) => {
+/** 形状命令只属于草图：局部重绘的文档与提交入口都不接受它 */
+function isMaskCommand(
+  command: SketchCommand | MaskCommand,
+): command is MaskCommand {
+  return command.type !== "shape";
+}
+
+/** 提交一条命令：丢弃重做分支，超过上限静默拒绝；重绘同时清除就地错误。
+ *  两个入口分开命名，形状命令在类型上就传不进局部重绘 */
+function commitDrawing(command: SketchCommand | MaskCommand) {
+  return (s: WorkspaceState) => {
     const d = s.drawing;
     if (d?.kind === "sketch") {
       const next = commitCommand(d.doc, d.cursor, command);
       return next ? { drawing: { ...d, ...next } } : s;
     }
-    if (d?.kind === "inpaint")
-      return {
-        drawing: {
-          ...d,
-          ...commitCommand(d.doc, d.cursor, command),
-          error: null,
-        },
-      };
+    if (d?.kind === "inpaint" && isMaskCommand(command)) {
+      const next = commitCommand(d.doc, d.cursor, command);
+      return { drawing: { ...d, ...next, error: null } };
+    }
     return s;
-  });
+  };
+}
+
+/** 草图画板：笔触、形状或清空 */
+export const strokeSketch = (command: SketchCommand) =>
+  set(commitDrawing(command));
+
+/** 局部重绘画板：只有笔触与清空 */
+export const strokeMask = (command: MaskCommand) => set(commitDrawing(command));
 
 /** 撤销、重做：游标只在已提交的命令范围内移动；重绘同时清除就地错误 */
 const moveCursor = (delta: -1 | 1) =>

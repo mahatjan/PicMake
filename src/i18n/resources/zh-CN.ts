@@ -308,6 +308,9 @@ export const zhCN = {
   },
 
   sketch: {
+    fit: "适应屏幕",
+    zoomPercent: "{{percent}}%",
+    gestureHint: "双指缩放与移动 · 点击比例复位",
     board: "草图画板",
     hint: "在纸上画下构图：位置、轮廓、色块",
     close: "关闭画板",
@@ -315,8 +318,18 @@ export const zhCN = {
     pen: "画笔",
     textDisabled: "文字（首版未提供）",
     textTitle: "文字 · 首版未提供",
-    shapeDisabled: "形状（首版未提供）",
-    shapeTitle: "形状 · 首版未提供",
+    shape: "形状",
+    shapeOptions: "形状选项",
+    shapeKind: {
+      rect: "矩形",
+      ellipse: "椭圆",
+      line: "直线",
+      arrow: "箭头",
+    },
+    fill: {
+      none: "空心",
+      solid: "实心",
+    },
     eraser: "橡皮",
     history: "撤销重做与清空",
     clear: "清空",

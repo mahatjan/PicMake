@@ -12,7 +12,8 @@ import { useObjectUrl } from "../hooks/useObjectUrl";
 import { useWorkspace } from "../store/workspace";
 import {
   redoDrawing,
-  strokeDrawing,
+  strokeMask,
+  strokeSketch,
   undoDrawing,
 } from "../store/workspace/actions";
 
@@ -56,8 +57,8 @@ export function DrawingLayer() {
           cursor={drawing.cursor}
           origin={drawing.origin}
           confirming={drawing.confirming}
-          onStroke={strokeDrawing}
-          onClear={() => strokeDrawing({ type: "clear" })}
+          onStroke={strokeSketch}
+          onClear={() => strokeSketch({ type: "clear" })}
           onUndo={undoDrawing}
           onRedo={redoDrawing}
           onConfirm={confirmSketch}
@@ -77,8 +78,8 @@ export function DrawingLayer() {
           cursor={drawing.cursor}
           confirming={drawing.confirming}
           error={drawing.error}
-          onStroke={strokeDrawing}
-          onClear={() => strokeDrawing({ type: "clear" })}
+          onStroke={strokeMask}
+          onClear={() => strokeMask({ type: "clear" })}
           onUndo={undoDrawing}
           onRedo={redoDrawing}
           onConfirm={confirmInpaint}

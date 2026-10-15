@@ -1,21 +1,28 @@
 import { describe, expect, it } from "vitest";
 import {
   SKETCH_MAX_COMMANDS,
+  arrowHead,
   blankSketch,
+  clampToCanvas,
   commitCommand,
+  constrainShapeEnd,
   eraserWidth,
   freezeSketch,
+  makeShape,
   makeStroke,
+  normalizeBox,
   penWidth,
   ratioMismatch,
+  shapeFitsMinSize,
   sketchSnapshotKey,
   toLogicalPoint,
   totalPoints,
   validateSketchDocument,
 } from "./sketch";
-import type { SketchCommand, SketchDocument } from "./types";
+import type { SketchCommand, SketchDocument, SketchShape } from "./types";
 
 type StrokeCmd = Extract<SketchCommand, { type: "stroke" }>;
+type ShapeCmd = Extract<SketchCommand, { type: "shape" }>;
 
 function strokeCmd(overrides: Partial<StrokeCmd> = {}): StrokeCmd {
   return {
@@ -27,6 +34,19 @@ function strokeCmd(overrides: Partial<StrokeCmd> = {}): StrokeCmd {
       { x: 10, y: 10 },
       { x: 20, y: 20 },
     ],
+    ...overrides,
+  };
+}
+
+function shapeCmd(overrides: Partial<ShapeCmd> = {}): ShapeCmd {
+  return {
+    type: "shape",
+    shape: "rect",
+    fill: "none",
+    color: "#1A1A1A",
+    width: 8,
+    from: { x: 10, y: 10 },
+    to: { x: 60, y: 50 },
     ...overrides,
   };
 }
@@ -162,6 +182,54 @@ describe("validateSketchDocument", () => {
       }),
     ).toBeNull();
   });
+
+  it("接受合法形状命令，四种种类与两种填充都算合法", () => {
+    const shapes: SketchShape[] = [
+      { ...shapeCmd(), shape: "rect", fill: "none" },
+      { ...shapeCmd(), shape: "rect", fill: "solid" },
+      { ...shapeCmd(), shape: "ellipse", fill: "none" },
+      { ...shapeCmd(), shape: "ellipse", fill: "solid" },
+      { ...shapeCmd(), shape: "line", fill: "none" },
+      { ...shapeCmd(), shape: "arrow", fill: "none" },
+    ];
+    const doc = { ...valid(), commands: [...valid().commands, ...shapes] };
+    expect(validateSketchDocument(doc)).toEqual(doc);
+  });
+
+  it("拒绝未知形状种类与填充值", () => {
+    for (const bad of [
+      { ...shapeCmd(), shape: "triangle" },
+      { ...shapeCmd(), fill: "dashed" },
+    ]) {
+      expect(
+        validateSketchDocument({ ...valid(), commands: [bad] }),
+      ).toBeNull();
+    }
+  });
+
+  it("拒绝形状的非法坐标与线宽", () => {
+    for (const bad of [
+      { ...shapeCmd(), to: { x: Number.NaN, y: 5 } },
+      { ...shapeCmd(), from: { x: 0, y: Number.POSITIVE_INFINITY } },
+      { ...shapeCmd(), width: 0 },
+      { ...shapeCmd(), width: -4 },
+      { ...shapeCmd(), width: Number.NaN },
+      { ...shapeCmd(), color: "" },
+      { ...shapeCmd(), to: undefined },
+    ]) {
+      expect(
+        validateSketchDocument({ ...valid(), commands: [bad] }),
+      ).toBeNull();
+    }
+  });
+
+  it("边界坐标 0 是合法起点", () => {
+    const doc = {
+      ...valid(),
+      commands: [shapeCmd({ from: { x: 0, y: 0 }, to: { x: 0, y: 40 } })],
+    };
+    expect(validateSketchDocument(doc)).toEqual(doc);
+  });
 });
 
 describe("ratioMismatch", () => {
@@ -194,5 +262,233 @@ describe("makeStroke", () => {
       points: [],
     });
     expect("color" in makeStroke("eraser", undefined, 30)).toBe(false);
+  });
+});
+
+describe("形状几何", () => {
+  const doc = { width: 100, height: 100 };
+
+  it("起点归到画布内", () => {
+    expect(clampToCanvas({ x: -20, y: 140 }, doc)).toEqual({ x: 0, y: 100 });
+  });
+
+  it("四个拖动方向归一为同一包围盒", () => {
+    const tl = { x: 20, y: 30 };
+    const tr = { x: 70, y: 30 };
+    const bl = { x: 20, y: 80 };
+    const br = { x: 70, y: 80 };
+    const box = { left: 20, top: 30, right: 70, bottom: 80 };
+    expect(normalizeBox(tl, br)).toEqual(box);
+    expect(normalizeBox(br, tl)).toEqual(box);
+    expect(normalizeBox(tr, bl)).toEqual(box);
+    expect(normalizeBox(bl, tr)).toEqual(box);
+  });
+
+  it("不带 Shift：终点夹在画布内", () => {
+    expect(
+      constrainShapeEnd(
+        "rect",
+        { x: 20, y: 20 },
+        { x: 150, y: -30 },
+        { shift: false, doc },
+      ),
+    ).toEqual({ x: 100, y: 0 });
+  });
+
+  it("Shift 矩形 / 椭圆：取横纵较大者作边长", () => {
+    expect(
+      constrainShapeEnd(
+        "rect",
+        { x: 20, y: 20 },
+        { x: 60, y: 40 },
+        { shift: true, doc },
+      ),
+    ).toEqual({ x: 60, y: 60 });
+    expect(
+      constrainShapeEnd(
+        "rect",
+        { x: 40, y: 20 },
+        { x: 10, y: 70 },
+        { shift: true, doc },
+      ),
+    ).toEqual({ x: 0, y: 60 });
+    expect(
+      constrainShapeEnd(
+        "ellipse",
+        { x: 20, y: 20 },
+        { x: 55, y: 30 },
+        { shift: true, doc },
+      ),
+    ).toEqual({ x: 55, y: 55 });
+  });
+
+  it("Shift 与画布边界同时生效：等比缩短到边界", () => {
+    expect(
+      constrainShapeEnd(
+        "rect",
+        { x: 90, y: 10 },
+        { x: 99, y: 80 },
+        { shift: true, doc },
+      ),
+    ).toEqual({ x: 100, y: 20 });
+  });
+
+  it("Shift 直线与箭头：吸附到 45° 的倍数，保留拖动长度", () => {
+    const line = constrainShapeEnd(
+      "line",
+      { x: 50, y: 50 },
+      { x: 90, y: 55 },
+      { shift: true, doc },
+    );
+    expect(line.x).toBeCloseTo(50 + Math.hypot(40, 5));
+    expect(line.y).toBeCloseTo(50);
+    const arrow = constrainShapeEnd(
+      "arrow",
+      { x: 50, y: 50 },
+      { x: 80, y: 85 },
+      { shift: true, doc },
+    );
+    const offset = Math.hypot(30, 35) / Math.SQRT2;
+    expect(arrow.x).toBeCloseTo(50 + offset);
+    expect(arrow.y).toBeCloseTo(50 + offset);
+  });
+
+  it("Shift 短线不延伸到边缘，零长度不生成长线", () => {
+    for (const kind of ["line", "arrow"] as const) {
+      expect(
+        constrainShapeEnd(
+          kind,
+          { x: 50, y: 50 },
+          { x: 60, y: 50 },
+          { shift: true, doc },
+        ),
+      ).toEqual({ x: 60, y: 50 });
+      expect(
+        constrainShapeEnd(
+          kind,
+          { x: 50, y: 50 },
+          { x: 50, y: 50 },
+          { shift: true, doc },
+        ),
+      ).toEqual({ x: 50, y: 50 });
+    }
+  });
+
+  it("Shift 线段越界时沿吸附方向缩短，朝外时停在起点", () => {
+    const end = constrainShapeEnd(
+      "arrow",
+      { x: 90, y: 50 },
+      { x: 140, y: 100 },
+      { shift: true, doc },
+    );
+    expect(end.x).toBeCloseTo(100);
+    expect(end.y).toBeCloseTo(60);
+    expect(
+      constrainShapeEnd(
+        "line",
+        { x: 100, y: 50 },
+        { x: 105, y: 52 },
+        { shift: true, doc },
+      ),
+    ).toEqual({ x: 100, y: 50 });
+  });
+
+  it("最小尺寸按显示像素判定", () => {
+    // 显示缩放 0.5：4 显示像素 = 8 逻辑像素
+    expect(shapeFitsMinSize("rect", { x: 0, y: 0 }, { x: 8, y: 8 }, 0.5)).toBe(
+      true,
+    );
+    expect(
+      shapeFitsMinSize("rect", { x: 0, y: 0 }, { x: 8, y: 7.9 }, 0.5),
+    ).toBe(false);
+    expect(shapeFitsMinSize("line", { x: 0, y: 0 }, { x: 0, y: 8 }, 0.5)).toBe(
+      true,
+    );
+    expect(
+      shapeFitsMinSize("arrow", { x: 0, y: 0 }, { x: 0, y: 7.9 }, 0.5),
+    ).toBe(false);
+  });
+
+  it("零尺寸（单击）不占撤销步骤", () => {
+    expect(shapeFitsMinSize("rect", { x: 1, y: 1 }, { x: 1, y: 1 }, 1)).toBe(
+      false,
+    );
+    expect(shapeFitsMinSize("ellipse", { x: 1, y: 1 }, { x: 1, y: 1 }, 1)).toBe(
+      false,
+    );
+    expect(shapeFitsMinSize("line", { x: 1, y: 1 }, { x: 1, y: 1 }, 1)).toBe(
+      false,
+    );
+  });
+
+  it("箭头：实心三角形随线宽变化，短箭头不超过线长的 40%", () => {
+    const long = arrowHead({ x: 0, y: 0 }, { x: 100, y: 0 }, 10)!;
+    expect(long.tip).toEqual({ x: 100, y: 0 });
+    expect(long.base.x).toBeCloseTo(66);
+    expect(long.left.y).toBeCloseTo(-17);
+    expect(long.right.y).toBeCloseTo(17);
+    const short = arrowHead({ x: 0, y: 0 }, { x: 20, y: 0 }, 10)!;
+    expect(short.base.x).toBeCloseTo(12); // 线长的 40% = 8 < 10 × 3.4
+    expect(arrowHead({ x: 1, y: 1 }, { x: 1, y: 1 }, 10)).toBeNull();
+  });
+
+  it("makeShape：直线与箭头不带填充", () => {
+    expect(
+      makeShape("line", "solid", "#000", 8, { x: 1, y: 1 }, { x: 2, y: 2 }),
+    ).toMatchObject({ type: "shape", shape: "line", fill: "none" });
+    expect(
+      makeShape("arrow", "solid", "#000", 8, { x: 1, y: 1 }, { x: 2, y: 2 }),
+    ).toMatchObject({ type: "shape", shape: "arrow", fill: "none" });
+    expect(
+      makeShape("rect", "solid", "#E53935", 12, { x: 1, y: 1 }, { x: 2, y: 2 }),
+    ).toEqual({
+      type: "shape",
+      shape: "rect",
+      fill: "solid",
+      color: "#E53935",
+      width: 12,
+      from: { x: 1, y: 1 },
+      to: { x: 2, y: 2 },
+    });
+  });
+});
+
+describe("形状命令的撤销与上限", () => {
+  it("形状计入命令上限", () => {
+    const doc: SketchDocument = {
+      version: 1,
+      width: 1024,
+      height: 1024,
+      commands: Array.from({ length: SKETCH_MAX_COMMANDS }, () => shapeCmd()),
+    };
+    expect(commitCommand(doc, doc.commands.length, shapeCmd())).toBeNull();
+  });
+
+  it("撤销一步只回退一个形状，重做恢复；撤销后新形状丢弃重做分支", () => {
+    let doc = blankSketch(1024, 1024);
+    let cursor = 0;
+    const rect = shapeCmd();
+    const ellipse = shapeCmd({ shape: "ellipse", fill: "solid" });
+    for (const cmd of [rect, ellipse]) {
+      const next = commitCommand(doc, cursor, cmd);
+      doc = next!.doc;
+      cursor = next!.cursor;
+    }
+    doc = freezeSketch(doc, 1);
+    cursor = 1;
+    expect(doc.commands).toEqual([rect]);
+    const next = commitCommand(doc, cursor, shapeCmd({ shape: "arrow" }));
+    expect(next?.doc.commands).toEqual([rect, shapeCmd({ shape: "arrow" })]);
+    expect(next?.cursor).toBe(2);
+  });
+
+  it("形状不计入笔画采样点上限", () => {
+    const doc: SketchDocument = {
+      version: 1,
+      width: 1024,
+      height: 1024,
+      commands: [strokeCmd(), shapeCmd(), shapeCmd({ shape: "arrow" })],
+    };
+    expect(totalPoints(doc)).toBe(2);
   });
 });

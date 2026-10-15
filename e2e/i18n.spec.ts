@@ -37,7 +37,7 @@ async function configure(page: Page, baseUrl = MOCK) {
   const dialog = page.getByRole("dialog", { name: "Settings" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("API URL").fill(baseUrl);
-  await dialog.getByLabel("API Key").fill("mock-key");
+  await dialog.getByLabel("API Key", { exact: true }).fill("mock-key");
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toBeHidden();
 }

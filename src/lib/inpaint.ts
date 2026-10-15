@@ -1,5 +1,10 @@
 /** 局部重绘纯规则：尺寸建议、底图约束、mask 校验、画笔范围、二值语义。Canvas 见 inpaint-canvas.ts */
-import type { InpaintIssue, MaskCommand, MaskDocument } from "./types";
+import type {
+  InpaintIssue,
+  MaskCommand,
+  MaskDocument,
+  MaskStroke,
+} from "./types";
 import { validateSketchDocument } from "./sketch";
 
 /** 底图像素保护阈值（产品保护值，非设备上限） */
@@ -100,7 +105,8 @@ export function blankMask(
   return { version: 1, baseImageId, width, height, commands: [] };
 }
 
-/** 读取校验：只查结构完整（文档由本应用产出，命令内容不作逐点复核） */
+/** 读取校验：只查结构完整（文档由本应用产出，命令内容不作逐点复核）。
+ *  选区只认笔触与清空：草图的形状命令显式拒绝，不靠类型断言放行 */
 export function validateMaskDocument(
   value: unknown,
 ): { doc: MaskDocument } | { issue: InpaintIssue } {
@@ -111,7 +117,8 @@ export function validateMaskDocument(
     typeof raw?.baseImageId !== "string" ||
     !raw.baseImageId ||
     !Number.isSafeInteger(doc.width) ||
-    !Number.isSafeInteger(doc.height)
+    !Number.isSafeInteger(doc.height) ||
+    !isMaskCommandList(doc.commands)
   )
     return { issue: "invalid-mask" };
   return {
@@ -120,9 +127,22 @@ export function validateMaskDocument(
       baseImageId: raw.baseImageId,
       width: doc.width,
       height: doc.height,
-      commands: doc.commands as MaskCommand[],
+      commands: doc.commands,
     },
   };
+}
+
+function isMaskCommandList(commands: unknown): commands is MaskCommand[] {
+  return (
+    Array.isArray(commands) &&
+    commands.every((cmd) => {
+      if (!cmd || typeof cmd !== "object") return false;
+      const type = (cmd as { type?: unknown }).type;
+      if (type === "clear") return true;
+      // 形状命令不是选区的一部分
+      return type === "stroke" && Array.isArray((cmd as MaskStroke).points);
+    })
+  );
 }
 
 /** 二值映射：selected（≥128）导出透明，其余不透明白 */

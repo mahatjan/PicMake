@@ -1,6 +1,7 @@
 /** 草图画板弹层：白纸全幅编辑器，控件浮在纸面。受控展示组件；Esc 不关闭，
  *  有修改时关闭由接线层确认。
- *  副作用（随卸载清理）：ResizeObserver / 初始焦点 rAF / 指针捕获 */
+ *  副作用（随卸载清理）：ResizeObserver / 初始焦点 rAF / 指针捕获 /
+ *  形状模式的 Shift 与 Esc 窗口监听 / 形状预览 rAF 合并 */
 import { FocusScope } from "react-aria";
 import { useTranslation } from "react-i18next";
 import {
@@ -12,12 +13,17 @@ import {
   type PointerEvent,
 } from "react";
 import {
+  ArrowRight,
   Check,
+  Circle,
   Eraser,
   Loader2,
+  Minus,
   Pencil,
   Redo2,
+  Scan,
   Shapes,
+  Square,
   Trash2,
   Type,
   Undo2,
@@ -27,25 +33,41 @@ import { sketchMeta } from "../i18n/labels";
 import type {
   SketchCommand,
   SketchDocument,
+  SketchFill,
   SketchOrigin,
   SketchPoint,
+  SketchShape,
+  SketchShapeKind,
   SketchStroke,
 } from "../lib/types";
 import {
+  SHAPE_KINDS,
   SKETCH_MAX_COMMANDS,
   SKETCH_MAX_POINTS,
   SKETCH_PALETTE,
+  clampToCanvas,
+  constrainShapeEnd,
   eraserWidth,
+  makeShape,
   makeStroke,
   penWidth,
+  shapeFitsMinSize,
   toLogicalPoint,
   totalPoints,
 } from "../lib/sketch";
 import {
   drawSketchCommand,
+  drawSketchShape,
   replaySketch,
   sketchHasInk,
 } from "../lib/sketch-canvas";
+import {
+  FIT_SKETCH_VIEW,
+  pinchSketchViewport,
+  type SketchViewport,
+} from "../lib/sketch-viewport";
+
+type SketchTool = "pen" | "eraser" | "shape";
 
 interface PaperBox {
   left: number;
@@ -89,14 +111,36 @@ export function SketchModal(props: {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
   const penBtnRef = useRef<HTMLButtonElement>(null);
+  const shapeBtnRef = useRef<HTMLButtonElement>(null);
   const customColorRef = useRef<HTMLInputElement>(null);
   const drawingRef = useRef<{
     pid: number;
     last: SketchPoint;
     cmd: SketchStroke;
   } | null>(null);
+  /** 形状拖动：属性在按下时定稿，预览每帧从已提交命令重放后重绘 */
+  const shapeRef = useRef<{
+    pid: number;
+    scale: number;
+    raw: SketchPoint;
+    cmd: SketchShape;
+  } | null>(null);
+  const shapeFrameRef = useRef(0);
   const ptsWarnedRef = useRef(false);
-  const [tool, setTool] = useState<"pen" | "eraser">("pen");
+  const touchesRef = useRef(new Map<number, SketchPoint>());
+  // 双指手势结束后，剩下的一指不接着画，直到全部抬起后重新落指。
+  const navigatingRef = useRef(false);
+  const pinchRef = useRef<{
+    center: SketchPoint;
+    distance: number;
+    view: SketchViewport;
+  } | null>(null);
+  const [view, setView] = useState(FIT_SKETCH_VIEW);
+  const viewRef = useRef(view);
+  const [tool, setTool] = useState<SketchTool>("pen");
+  const [shapeKind, setShapeKind] = useState<SketchShapeKind>("rect");
+  const [shapeFill, setShapeFill] = useState<SketchFill>("none");
+  const [shapePanel, setShapePanel] = useState(false);
   const [colorIdx, setColorIdx] = useState(0);
   const [colorHex, setColorHex] = useState<string>(SKETCH_PALETTE[0].hex);
   const [sizeT, setSizeT] = useState(0.35);
@@ -112,6 +156,16 @@ export function SketchModal(props: {
     const zone = zoneRef.current;
     if (!zone) return;
     const fit = () => {
+      touchesRef.current.clear();
+      pinchRef.current = null;
+      navigatingRef.current = false;
+      drawingRef.current = null;
+      shapeRef.current = null;
+      cancelAnimationFrame(shapeFrameRef.current);
+      shapeFrameRef.current = 0;
+      if (ghostRef.current) ghostRef.current.style.display = "none";
+      viewRef.current = FIT_SKETCH_VIEW;
+      setView(FIT_SKETCH_VIEW);
       const zw = zone.clientWidth;
       const zh = zone.clientHeight;
       const narrow = zw < 720;
@@ -172,11 +226,20 @@ export function SketchModal(props: {
     replaySketch(ctx, doc, cursor, cv.width / doc.width);
   }, [doc, cursor]);
 
-  useEffect(() => {
+  // 缩放时提高栅格精度，长边最多 4096px，避免移动端创建过大的 Canvas。
+  const density = box
+    ? Math.min(box.dpr * view.scale, 4096 / Math.max(box.width, box.height))
+    : 1;
+  const rasterWidth = box ? Math.round(box.width * density) : 0;
+  const rasterHeight = box ? Math.round(box.height * density) : 0;
+  useLayoutEffect(() => {
     replayToCanvas();
+  }, [box, rasterWidth, rasterHeight, replayToCanvas]);
+
+  useEffect(() => {
     // hasInk 由栅格结果派生，仅在重放后同步
     setHasInk(sketchHasInk(doc, cursor));
-  }, [doc, cursor, box, replayToCanvas]);
+  }, [doc, cursor]);
 
   // FocusScope 负责限制与恢复焦点；进入时仍聚焦画笔。
   useEffect(() => {
@@ -219,12 +282,13 @@ export function SketchModal(props: {
         hideGhost();
         return;
       }
-      const d = eraserWidth(sizeT, doc) * 2 * (r.width / doc.width);
+      const localScale = paper.offsetWidth / r.width;
+      const d = eraserWidth(sizeT, doc) * 2 * (paper.offsetWidth / doc.width);
       ghost.style.display = "block";
       ghost.style.width = `${d}px`;
       ghost.style.height = `${d}px`;
-      ghost.style.left = `${clientX - r.left - d / 2}px`;
-      ghost.style.top = `${clientY - r.top - d / 2}px`;
+      ghost.style.left = `${(clientX - r.left) * localScale - d / 2}px`;
+      ghost.style.top = `${(clientY - r.top) * localScale - d / 2}px`;
     },
     [tool, sizeT, doc, props.confirming, hideGhost],
   );
@@ -233,33 +297,184 @@ export function SketchModal(props: {
     if (tool !== "eraser") hideGhost();
   }, [tool, hideGhost]);
 
+  /* ── 形状预览：每帧从已提交命令重放再画当前形状，避免残影与重复叠加 ── */
+  const paintShape = useCallback(() => {
+    const cv = canvasRef.current;
+    const ctx = cv?.getContext("2d");
+    const d = shapeRef.current;
+    if (!cv || !ctx || !d) return;
+    const scale = cv.width / doc.width;
+    replaySketch(ctx, doc, cursor, scale);
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    drawSketchShape(ctx, d.cmd);
+  }, [doc, cursor]);
+
+  const scheduleShape = useCallback(() => {
+    if (shapeFrameRef.current) return;
+    shapeFrameRef.current = requestAnimationFrame(() => {
+      shapeFrameRef.current = 0;
+      paintShape();
+    });
+  }, [paintShape]);
+
+  // 预览帧仅服务当前画板会话，卸载时取消尚未执行的帧。
+  useEffect(() => () => cancelAnimationFrame(shapeFrameRef.current), []);
+
+  const updateShape = useCallback(
+    (raw: SketchPoint, shift: boolean) => {
+      const s = shapeRef.current;
+      if (!s) return;
+      s.raw = raw;
+      s.cmd = {
+        ...s.cmd,
+        to: constrainShapeEnd(s.cmd.shape, s.cmd.from, raw, { shift, doc }),
+      };
+      scheduleShape();
+    },
+    [doc, scheduleShape],
+  );
+
+  const dropShape = useCallback(() => {
+    if (shapeFrameRef.current) {
+      cancelAnimationFrame(shapeFrameRef.current);
+      shapeFrameRef.current = 0;
+    }
+    if (!shapeRef.current) return;
+    shapeRef.current = null;
+    replayToCanvas(); // 丢弃未完成的形状，回到已提交画面
+  }, [replayToCanvas]);
+
+  const dropStroke = useCallback(() => {
+    if (!drawingRef.current) return;
+    drawingRef.current = null;
+    replayToCanvas();
+  }, [replayToCanvas]);
+
+  /** 切换工具或执行其他画板操作前，先丢掉未完成的预览 */
+  const dropLive = useCallback(() => {
+    dropShape();
+    dropStroke();
+    hideGhost();
+  }, [dropShape, dropStroke, hideGhost]);
+
+  const cancelInteraction = useCallback(() => {
+    touchesRef.current.clear();
+    pinchRef.current = null;
+    navigatingRef.current = false;
+    dropLive();
+  }, [dropLive]);
+
+  // 所有工具的临时操作随失焦、页面隐藏取消；会话卸载时移除监听。
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) cancelInteraction();
+    };
+    window.addEventListener("blur", cancelInteraction);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("blur", cancelInteraction);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [cancelInteraction]);
+
+  /* ── 形状模式的窗口监听：Shift 约束、Esc 取消、失焦丢弃；离开形状模式即解除 ── */
+  useEffect(() => {
+    if (tool !== "shape") return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Shift" && shapeRef.current)
+        updateShape(shapeRef.current.raw, true);
+      if (e.key === "Escape") {
+        if (shapeRef.current) {
+          dropShape();
+          return;
+        }
+        if (shapePanel) {
+          setShapePanel(false);
+          shapeBtnRef.current?.focus();
+        }
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Shift" && shapeRef.current)
+        updateShape(shapeRef.current.raw, false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [tool, shapePanel, dropShape, updateShape]);
+
+  const selectTool = (next: SketchTool) => {
+    dropLive();
+    setTool(next);
+    if (next !== "shape") setShapePanel(false);
+  };
+
+  /** 选色：形状模式保持形状，其余沿用切回画笔的既有行为 */
+  const selectPenTool = () => {
+    if (tool !== "shape") selectTool("pen");
+  };
+
+  const onShapeDown = (e: React.PointerEvent, rect: DOMRect) => {
+    setShapePanel(false);
+    const from = clampToCanvas(
+      toLogicalPoint(e.clientX, e.clientY, rect, doc),
+      doc,
+    );
+    shapeRef.current = {
+      pid: e.pointerId,
+      scale: rect.width / doc.width,
+      raw: from,
+      // 本次预览与提交固定同一组属性，后续改设置不影响已开始的形状
+      cmd: makeShape(
+        shapeKind,
+        shapeFill,
+        colorHex,
+        penWidth(sizeT, doc),
+        from,
+        from,
+      ),
+    };
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
-    if (props.confirming || drawingRef.current) return;
+    if (props.confirming || drawingRef.current || shapeRef.current) return;
     if (doc.commands.length >= SKETCH_MAX_COMMANDS) {
       props.onLimit("commands");
       return;
     }
+    if (e.button !== 0 && e.pointerType === "mouse") return;
     e.preventDefault();
     const rect = paperRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const cmd = makeStroke(
-      tool,
-      tool === "pen" ? colorHex : undefined,
-      tool === "eraser" ? eraserWidth(sizeT, doc) : penWidth(sizeT, doc),
-    );
-    const pt = toLogicalPoint(e.clientX, e.clientY, rect, doc);
-    cmd.points.push(pt);
-    drawingRef.current = { pid: e.pointerId, last: pt, cmd };
-    try {
-      paperRef.current?.setPointerCapture(e.pointerId);
-    } catch {
-      /* 无活动指针时降级为普通跟踪 */
+    if (tool === "shape") {
+      onShapeDown(e, rect);
+    } else {
+      const cmd = makeStroke(
+        tool,
+        tool === "pen" ? colorHex : undefined,
+        tool === "eraser" ? eraserWidth(sizeT, doc) : penWidth(sizeT, doc),
+      );
+      const pt = toLogicalPoint(e.clientX, e.clientY, rect, doc);
+      cmd.points.push(pt);
+      drawingRef.current = { pid: e.pointerId, last: pt, cmd };
+      liveSeg(pt, null, cmd);
     }
-    liveSeg(pt, null, cmd);
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
     moveGhost(e.clientX, e.clientY);
+    const s = shapeRef.current;
+    if (s) {
+      if (e.pointerId !== s.pid) return;
+      const rect = paperRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const raw = toLogicalPoint(e.clientX, e.clientY, rect, doc);
+      updateShape(raw, e.shiftKey); // 指针携带实际修饰键状态，包括进入形状模式前按住的 Shift。
+      return;
+    }
     const d = drawingRef.current;
     if (!d || e.pointerId !== d.pid) return;
     const rect = paperRef.current?.getBoundingClientRect();
@@ -279,6 +494,26 @@ export function SketchModal(props: {
   };
 
   const endDraw = (e: React.PointerEvent, discard: boolean) => {
+    const s = shapeRef.current;
+    if (s && e.pointerId === s.pid) {
+      if (!discard) {
+        const rect = paperRef.current?.getBoundingClientRect();
+        if (rect) {
+          s.scale = rect.width / doc.width;
+          updateShape(
+            toLogicalPoint(e.clientX, e.clientY, rect, doc),
+            e.shiftKey,
+          );
+        }
+      }
+      if (
+        !discard &&
+        shapeFitsMinSize(s.cmd.shape, s.cmd.from, s.cmd.to, s.scale)
+      )
+        props.onStroke(s.cmd);
+      dropShape(); // 尺寸不足或取消：不提交，恢复已提交画面
+      return;
+    }
     const d = drawingRef.current;
     if (!d || e.pointerId !== d.pid) return;
     drawingRef.current = null;
@@ -288,6 +523,71 @@ export function SketchModal(props: {
       return;
     }
     props.onStroke(d.cmd);
+  };
+
+  const touchPair = () => {
+    const [a, b] = [...touchesRef.current.values()];
+    if (!a || !b) return null;
+    return {
+      center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+      distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+    };
+  };
+
+  // 捕获在整个绘图区：第二指可以落在纸面外；浮动工具条不参与手势。
+  const onZoneDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (props.confirming || (e.pointerType === "mouse" && e.button !== 0))
+      return;
+    e.preventDefault();
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* 合成事件或无活动指针时仍可普通跟踪。 */
+    }
+    if (e.pointerType === "touch") {
+      touchesRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const pair = touchPair();
+      if (pair) {
+        dropLive();
+        navigatingRef.current = true;
+        pinchRef.current = { ...pair, view: viewRef.current };
+      }
+    }
+    if (navigatingRef.current) return;
+    if (e.target instanceof Node && paperRef.current?.contains(e.target))
+      onPointerDown(e);
+  };
+
+  const onZoneMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (touchesRef.current.has(e.pointerId))
+      touchesRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (navigatingRef.current) {
+      const pair = touchPair();
+      const start = pinchRef.current;
+      const zone = zoneRef.current?.getBoundingClientRect();
+      if (pair && start && box && zone) {
+        const next = pinchSketchViewport(
+          start.view,
+          { x: start.center.x - zone.left, y: start.center.y - zone.top },
+          { x: pair.center.x - zone.left, y: pair.center.y - zone.top },
+          pair.distance / start.distance,
+          box,
+        );
+        viewRef.current = next;
+        setView(next);
+      }
+      return;
+    }
+    onPointerMove(e);
+  };
+
+  const onZoneEnd = (e: React.PointerEvent, discard: boolean) => {
+    const wasNavigating = navigatingRef.current;
+    touchesRef.current.delete(e.pointerId);
+    const pair = touchPair();
+    pinchRef.current = pair ? { ...pair, view: viewRef.current } : null;
+    if (touchesRef.current.size === 0) navigatingRef.current = false;
+    if (!wasNavigating) endDraw(e, discard);
   };
 
   /* ── 大小滑杆：上大下小 ── */
@@ -311,7 +611,15 @@ export function SketchModal(props: {
           aria-modal="true"
           aria-label={t("sketch.board")}
         >
-          <div className="pm-sk-zone" ref={zoneRef}>
+          <div
+            className="pm-sk-zone"
+            ref={zoneRef}
+            onPointerDown={onZoneDown}
+            onPointerMove={onZoneMove}
+            onPointerUp={(e) => onZoneEnd(e, false)}
+            onPointerCancel={(e) => onZoneEnd(e, true)}
+            onLostPointerCapture={(e) => onZoneEnd(e, true)}
+          >
             {box && (
               <div
                 className={`pm-sk-paper ${tool}`}
@@ -321,18 +629,14 @@ export function SketchModal(props: {
                   top: box.top,
                   width: box.width,
                   height: box.height,
+                  transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
                 }}
-                onPointerDown={onPointerDown}
-                onPointerMove={onPointerMove}
-                onPointerUp={(e) => endDraw(e, false)}
-                onPointerCancel={(e) => endDraw(e, true)}
-                onLostPointerCapture={(e) => endDraw(e, true)}
                 onPointerLeave={hideGhost}
               >
                 <canvas
                   ref={canvasRef}
-                  width={Math.round(box.width * box.dpr)}
-                  height={Math.round(box.height * box.dpr)}
+                  width={rasterWidth}
+                  height={rasterHeight}
                   style={{ width: box.width, height: box.height }}
                 />
                 <p
@@ -350,6 +654,27 @@ export function SketchModal(props: {
               </div>
             )}
           </div>
+
+          <button
+            type="button"
+            className="pm-sk-fit"
+            aria-label={t("sketch.fit")}
+            title={t("sketch.fit")}
+            disabled={busy}
+            onClick={() => {
+              cancelInteraction();
+              viewRef.current = FIT_SKETCH_VIEW;
+              setView(FIT_SKETCH_VIEW);
+            }}
+          >
+            <Scan size={17} />
+            <span>
+              {t("sketch.zoomPercent", {
+                percent: Math.round(view.scale * 100),
+              })}
+            </span>
+          </button>
+          <p className="pm-sk-gesture-hint">{t("sketch.gestureHint")}</p>
 
           <button
             type="button"
@@ -372,7 +697,7 @@ export function SketchModal(props: {
               className={"pm-sk-tool pen" + (tool === "pen" ? " on" : "")}
               aria-label={t("sketch.pen")}
               aria-pressed={tool === "pen"}
-              onClick={() => setTool("pen")}
+              onClick={() => selectTool("pen")}
             >
               <Pencil size={19} />
             </button>
@@ -387,10 +712,21 @@ export function SketchModal(props: {
             </button>
             <button
               type="button"
-              className="pm-sk-tool"
-              aria-label={t("sketch.shapeDisabled")}
-              title={t("sketch.shapeTitle")}
-              disabled
+              ref={shapeBtnRef}
+              className={"pm-sk-tool" + (tool === "shape" ? " on" : "")}
+              aria-label={t("sketch.shape")}
+              aria-pressed={tool === "shape"}
+              aria-expanded={tool === "shape" && shapePanel}
+              disabled={busy}
+              onClick={() => {
+                dropLive();
+                if (tool === "shape") {
+                  setShapePanel((open) => !open);
+                  return;
+                }
+                setTool("shape");
+                setShapePanel(true);
+              }}
             >
               <Shapes size={19} />
             </button>
@@ -399,11 +735,62 @@ export function SketchModal(props: {
               className={"pm-sk-tool" + (tool === "eraser" ? " on" : "")}
               aria-label={t("sketch.eraser")}
               aria-pressed={tool === "eraser"}
-              onClick={() => setTool("eraser")}
+              onClick={() => selectTool("eraser")}
             >
               <Eraser size={19} />
             </button>
           </div>
+
+          {tool === "shape" && shapePanel && (
+            <div
+              className="pm-sk-shapes"
+              role="group"
+              aria-label={t("sketch.shapeOptions")}
+            >
+              <div className="pm-sk-shape-row" role="group">
+                {SHAPE_KINDS.map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    className={
+                      "pm-sk-shape-btn" + (shapeKind === kind ? " on" : "")
+                    }
+                    aria-label={t(`sketch.shapeKind.${kind}`)}
+                    aria-pressed={shapeKind === kind}
+                    disabled={busy}
+                    onClick={() => {
+                      dropLive();
+                      setShapeKind(kind);
+                    }}
+                  >
+                    {shapeIcon(kind)}
+                  </button>
+                ))}
+              </div>
+              {(shapeKind === "rect" || shapeKind === "ellipse") && (
+                <div className="pm-sk-shape-row" role="group">
+                  {(["none", "solid"] as const).map((fill) => (
+                    <button
+                      key={fill}
+                      type="button"
+                      className={
+                        "pm-sk-shape-btn" + (shapeFill === fill ? " on" : "")
+                      }
+                      aria-label={t(`sketch.fill.${fill}`)}
+                      aria-pressed={shapeFill === fill}
+                      disabled={busy}
+                      onClick={() => {
+                        dropLive();
+                        setShapeFill(fill);
+                      }}
+                    >
+                      {shapeFillIcon(fill)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div
             className="pm-sk-hist"
@@ -414,7 +801,10 @@ export function SketchModal(props: {
               type="button"
               aria-label={t("common.undo")}
               disabled={!canUndo || busy}
-              onClick={props.onUndo}
+              onClick={() => {
+                dropLive();
+                props.onUndo();
+              }}
             >
               <Undo2 size={19} />
             </button>
@@ -422,7 +812,10 @@ export function SketchModal(props: {
               type="button"
               aria-label={t("common.redo")}
               disabled={!canRedo || busy}
-              onClick={props.onRedo}
+              onClick={() => {
+                dropLive();
+                props.onRedo();
+              }}
             >
               <Redo2 size={19} />
             </button>
@@ -430,7 +823,10 @@ export function SketchModal(props: {
               type="button"
               aria-label={t("sketch.clear")}
               disabled={!hasInk || busy}
-              onClick={props.onClear}
+              onClick={() => {
+                dropLive();
+                props.onClear();
+              }}
             >
               <Trash2 size={19} />
             </button>
@@ -488,7 +884,7 @@ export function SketchModal(props: {
                 aria-label={t("sketch.customColor")}
                 aria-pressed={colorIdx === -1 || pickerOpen}
                 onClick={() => {
-                  setTool("pen");
+                  selectPenTool();
                   setPickerOpen((open) => !open);
                 }}
               />
@@ -512,7 +908,7 @@ export function SketchModal(props: {
                   aria-label={t("sketch.customColor")}
                   aria-pressed={colorIdx === -1}
                   onClick={() => {
-                    setTool("pen");
+                    selectPenTool();
                     customColorRef.current?.click();
                   }}
                 />
@@ -530,7 +926,7 @@ export function SketchModal(props: {
                 })}
                 aria-pressed={colorIdx === i}
                 onClick={() => {
-                  setTool("pen");
+                  selectPenTool();
                   setPickerOpen(false);
                   setColorIdx(i);
                   setColorHex(c.hex);
@@ -549,7 +945,10 @@ export function SketchModal(props: {
             aria-label={busy ? t("sketch.preparing") : t("sketch.use")}
             title={busy ? t("sketch.preparingTitle") : t("sketch.use")}
             disabled={!hasInk || busy}
-            onClick={props.onConfirm}
+            onClick={() => {
+              dropLive();
+              props.onConfirm();
+            }}
           >
             {busy ? <Loader2 size={21} /> : <Check size={21} />}
           </button>
@@ -558,6 +957,26 @@ export function SketchModal(props: {
         </div>
       </div>
     </FocusScope>
+  );
+}
+
+/** 形状种类图标：与面板按钮一一对应，图标本身随语言不变 */
+function shapeIcon(kind: SketchShapeKind) {
+  const size = 19;
+  if (kind === "rect") return <Square size={size} />;
+  if (kind === "ellipse") return <Circle size={size} />;
+  if (kind === "line") return <Minus size={size + 2} />;
+  return <ArrowRight size={size + 2} />;
+}
+
+/** 填充图标：空心描边、实心填充，用同一枚方块区分 */
+function shapeFillIcon(fill: SketchFill) {
+  return (
+    <Square
+      size={19}
+      strokeWidth={1.5}
+      fill={fill === "solid" ? "currentColor" : "none"}
+    />
   );
 }
 

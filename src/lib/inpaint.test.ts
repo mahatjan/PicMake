@@ -153,6 +153,42 @@ describe("validateMaskDocument", () => {
     ).toEqual({ issue: "invalid-mask" });
   });
 
+  it("拒绝形状命令：形状只属于草图", () => {
+    expect(
+      validateMaskDocument({
+        ...base,
+        commands: [
+          {
+            type: "shape",
+            shape: "rect",
+            fill: "solid",
+            color: "#000",
+            width: 8,
+            from: { x: 0, y: 0 },
+            to: { x: 10, y: 10 },
+          },
+        ],
+      }),
+    ).toEqual({ issue: "invalid-mask" });
+    expect(
+      validateMaskDocument({
+        ...base,
+        commands: [
+          { type: "stroke", tool: "pen", width: 10, points: [{ x: 1, y: 1 }] },
+          {
+            type: "shape",
+            shape: "line",
+            fill: "none",
+            color: "#000",
+            width: 4,
+            from: { x: 0, y: 0 },
+            to: { x: 9, y: 9 },
+          },
+        ],
+      }),
+    ).toEqual({ issue: "invalid-mask" });
+  });
+
   it("大底图尺寸不继承草图 3840 上限（TECH §6.2）", () => {
     const doc = blankMask("img-big", 4032, 3024);
     expect(validateMaskDocument(doc)).toEqual({ doc: doc });

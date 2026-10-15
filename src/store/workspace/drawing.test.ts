@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { ImageRow } from "../../db/schema";
 import { blankMask } from "../../lib/inpaint";
 import { blankSketch, SKETCH_MAX_COMMANDS } from "../../lib/sketch";
-import type { MaskCommand, MaskImage, SketchCommand } from "../../lib/types";
+import type {
+  MaskCommand,
+  MaskImage,
+  SketchCommand,
+  SketchShapeKind,
+} from "../../lib/types";
 import { initialWorkspace, useWorkspace } from "./index";
 import {
   applyInpaintSelection,
@@ -18,7 +23,8 @@ import {
   setDrawingError,
   setFocusIdx,
   setLastDoneId,
-  strokeDrawing,
+  strokeMask,
+  strokeSketch,
   undoDrawing,
 } from "./actions";
 
@@ -28,6 +34,11 @@ const commands = () => {
   const d = drawing();
   return d && d.kind !== "opening" ? d.doc.commands : [];
 };
+/** 撤销游标之前的已提交前缀 */
+const committed = () => {
+  const d = drawing();
+  return d && d.kind !== "opening" ? d.doc.commands.slice(0, d.cursor) : [];
+};
 
 const stroke = (x: number): SketchCommand => ({
   type: "stroke",
@@ -35,6 +46,23 @@ const stroke = (x: number): SketchCommand => ({
   color: "#000",
   width: 3,
   points: [{ x, y: x }],
+});
+/** 选区只有笔触与清空：形状命令进不了这个入口 */
+const maskStroke = (x: number): MaskCommand => ({
+  type: "stroke",
+  tool: "pen",
+  width: 3,
+  points: [{ x, y: x }],
+});
+/** 形状只提交给草图 */
+const shape = (kind: SketchShapeKind): SketchCommand => ({
+  type: "shape",
+  shape: kind,
+  fill: "none",
+  color: "#000",
+  width: 3,
+  from: { x: 1, y: 1 },
+  to: { x: 20, y: 14 },
 });
 const image = (id: string, width = 1024, height = 1024): ImageRow => ({
   id,
@@ -81,8 +109,8 @@ describe("草图", () => {
 
   it("笔画、撤销、重做：游标只在已提交范围内移动，新笔画丢弃重做分支", () => {
     openSketch(blankSketch(100, 100), { kind: "new" }, null);
-    strokeDrawing(stroke(1));
-    strokeDrawing(stroke(2));
+    strokeSketch(stroke(1));
+    strokeSketch(stroke(2));
     expect(drawing()).toMatchObject({ cursor: 2 });
     const atEnd = state();
     redoDrawing();
@@ -94,9 +122,44 @@ describe("草图", () => {
     expect(state()).toBe(atStart);
     redoDrawing();
     expect(drawing()).toMatchObject({ cursor: 1 });
-    strokeDrawing(stroke(3));
+    strokeSketch(stroke(3));
     expect(commands()).toEqual([stroke(1), stroke(3)]);
     expect(drawing()).toMatchObject({ cursor: 2 });
+  });
+
+  it("形状：一步一撤、重做恢复；撤销后新画形状丢弃重做分支", () => {
+    openSketch(blankSketch(100, 100), { kind: "new" }, null);
+    const rect = shape("rect");
+    const arrow = shape("arrow");
+    strokeSketch(rect);
+    strokeSketch(arrow);
+    expect(committed()).toEqual([rect, arrow]);
+    undoDrawing();
+    expect(committed()).toEqual([rect]);
+    redoDrawing();
+    expect(committed()).toEqual([rect, arrow]);
+    undoDrawing();
+    undoDrawing();
+    const solid = shape("ellipse");
+    strokeSketch(solid);
+    expect(commands()).toEqual([solid]); // 重做分支被丢弃
+    expect(drawing()).toMatchObject({ cursor: 1 });
+  });
+
+  it("形状计入命令上限", () => {
+    openSketch(
+      {
+        ...blankSketch(10, 10),
+        commands: Array.from({ length: SKETCH_MAX_COMMANDS }, () =>
+          shape("rect"),
+        ),
+      },
+      { kind: "new" },
+      null,
+    );
+    const before = state();
+    strokeSketch(shape("line"));
+    expect(state()).toBe(before);
   });
 
   it("超过命令上限时静默拒绝", () => {
@@ -107,13 +170,13 @@ describe("草图", () => {
       null,
     );
     const before = state();
-    strokeDrawing(stroke(2));
+    strokeSketch(stroke(2));
     expect(state()).toBe(before);
   });
 
   it("没有画板或底图还在准备时，笔画、撤销、重做、确认中都不起作用", () => {
     const noop = () => {
-      strokeDrawing(stroke(1));
+      strokeSketch(stroke(1));
       undoDrawing();
       redoDrawing();
       setDrawingConfirming(true);
@@ -206,7 +269,7 @@ describe("局部重绘", () => {
     setDrawingConfirming(true);
     setDrawingError("empty-mask");
     expect(drawing()).toMatchObject({ confirming: false, error: "empty-mask" });
-    strokeDrawing(stroke(1));
+    strokeMask(maskStroke(1));
     expect(drawing()).toMatchObject({ cursor: 1, error: null });
     setDrawingError("canvas-failed");
     undoDrawing();

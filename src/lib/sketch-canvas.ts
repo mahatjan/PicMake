@@ -1,5 +1,72 @@
-/** 草图 Canvas 侧：顺序重放、alpha 判空、白底合成导出；无 React 状态 */
-import type { SketchCommand, SketchDocument } from "./types";
+/** 草图 Canvas 侧：顺序重放、形状绘制、alpha 判空、白底合成导出；无 React 状态 */
+import { arrowHead, normalizeBox } from "./sketch";
+import type { SketchCommand, SketchDocument, SketchShape } from "./types";
+
+/** 单个形状的绘制；调用方须已设置好指向逻辑坐标的 transform */
+export function drawSketchShape(
+  ctx: CanvasRenderingContext2D,
+  cmd: SketchShape,
+): void {
+  const color = cmd.color || "#1A1A1A";
+  const solid = cmd.fill === "solid";
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = cmd.width;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  if (cmd.shape === "line") {
+    ctx.beginPath();
+    ctx.moveTo(cmd.from.x, cmd.from.y);
+    ctx.lineTo(cmd.to.x, cmd.to.y);
+    ctx.stroke();
+    return;
+  }
+  if (cmd.shape === "arrow") {
+    const head = arrowHead(cmd.from, cmd.to, cmd.width);
+    if (!head) return;
+    const angle = Math.atan2(cmd.to.y - cmd.from.y, cmd.to.x - cmd.from.x);
+    const radius = cmd.width / 2;
+    const nx = -Math.sin(angle) * radius;
+    const ny = Math.cos(angle) * radius;
+    // 箭杆止于头部底边，与三角头合成一个填充轮廓；仅尾部画半圆，尖端没有线帽外露。
+    ctx.beginPath();
+    ctx.moveTo(cmd.from.x + nx, cmd.from.y + ny);
+    ctx.lineTo(head.base.x + nx, head.base.y + ny);
+    ctx.lineTo(head.right.x, head.right.y);
+    ctx.lineTo(head.tip.x, head.tip.y);
+    ctx.lineTo(head.left.x, head.left.y);
+    ctx.lineTo(head.base.x - nx, head.base.y - ny);
+    ctx.lineTo(cmd.from.x - nx, cmd.from.y - ny);
+    ctx.arc(
+      cmd.from.x,
+      cmd.from.y,
+      radius,
+      angle - Math.PI / 2,
+      angle + Math.PI / 2,
+      true,
+    );
+    ctx.closePath();
+    ctx.fill();
+    return;
+  }
+  const box = normalizeBox(cmd.from, cmd.to);
+  ctx.beginPath();
+  if (cmd.shape === "rect")
+    ctx.rect(box.left, box.top, box.right - box.left, box.bottom - box.top);
+  else
+    ctx.ellipse(
+      (box.left + box.right) / 2,
+      (box.top + box.bottom) / 2,
+      (box.right - box.left) / 2,
+      (box.bottom - box.top) / 2,
+      0,
+      0,
+      Math.PI * 2,
+    );
+  // 实心填满当前颜色，不再叠边框；空心只描边
+  if (solid) ctx.fill();
+  else ctx.stroke();
+}
 
 /** 单条命令绘制；调用方须已设置好指向逻辑坐标的 transform */
 export function drawSketchCommand(
@@ -9,6 +76,12 @@ export function drawSketchCommand(
 ): void {
   if (cmd.type === "clear") {
     ctx.clearRect(0, 0, size.width, size.height);
+    return;
+  }
+  if (cmd.type === "shape") {
+    ctx.save();
+    drawSketchShape(ctx, cmd);
+    ctx.restore();
     return;
   }
   ctx.save();

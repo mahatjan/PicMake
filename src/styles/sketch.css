@@ -41,9 +41,13 @@
 .pm-sk-zone {
   position: absolute;
   inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: contain;
 }
 .pm-sk-paper {
   position: absolute;
+  transform-origin: 0 0;
   background: var(--pm-sketch-paper);
   border-radius: 8px;
   overflow: hidden;
@@ -54,7 +58,8 @@
     0 0 0 1px var(--pm-sketch-edge),
     0 2px 16px rgba(0, 0, 0, 0.06);
 }
-.pm-sk-paper.pen {
+.pm-sk-paper.pen,
+.pm-sk-paper.shape {
   cursor: crosshair;
 }
 .pm-sk-paper.eraser {
@@ -85,6 +90,48 @@
   border-radius: 50%;
   pointer-events: none;
   z-index: 5;
+}
+
+.pm-sk-fit {
+  position: absolute;
+  top: 66px;
+  left: 22px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 88px;
+  height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--pm-sketch-line);
+  border-radius: 12px;
+  background: var(--pm-sketch-paper);
+  color: var(--pm-sketch-ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.pm-sk-fit:hover {
+  background: var(--pm-sketch-hover);
+}
+.pm-sk-fit:disabled {
+  opacity: 0.4;
+}
+.pm-sk-gesture-hint {
+  display: none;
+  position: absolute;
+  top: 114px;
+  left: 22px;
+  z-index: 6;
+  margin: 0;
+  color: var(--pm-sketch-meta);
+  font-size: 11px;
+  pointer-events: none;
+}
+@media (pointer: coarse) {
+  .pm-sk-gesture-hint {
+    display: block;
+  }
 }
 
 /* 浮动控件（命中区域经 ::after 扩到 ≥44px） */
@@ -149,6 +196,56 @@
   box-shadow: 0 1px 5px rgba(0, 0, 0, 0.12);
 }
 .pm-sk-tool:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+/* 形状选项面板：锚在顶部工具条下方，宽屏避开右侧撤销重做区 */
+.pm-sk-shapes {
+  position: absolute;
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 220px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px;
+  background: var(--pm-sketch-paper);
+  border: 1px solid var(--pm-sketch-line);
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  z-index: 6;
+}
+.pm-sk-shape-row {
+  display: flex;
+  gap: 4px;
+}
+.pm-sk-shape-btn {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--pm-sketch-ink);
+  border: 1px solid transparent;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+.pm-sk-shape-btn:hover {
+  background: var(--pm-sketch-hover);
+}
+.pm-sk-shape-btn.on {
+  background: var(--pm-sketch-paper);
+  border-color: var(--pm-accent);
+  box-shadow: 0 0 0 1px var(--pm-accent);
+}
+.pm-sk-shape-btn:disabled {
   opacity: 0.28;
   cursor: default;
 }
@@ -446,7 +543,9 @@
 
 /* 画板控件焦点环 */
 .pm-sk-close:focus-visible,
+.pm-sk-fit:focus-visible,
 .pm-sk-tool:focus-visible,
+.pm-sk-shape-btn:focus-visible,
 .pm-sk-hist button:focus-visible,
 .pm-sk-use:focus-visible,
 .pm-sk-sizer:focus-visible,
@@ -482,6 +581,11 @@
     width: 34px;
     height: 34px;
   }
+  /* 窄屏的历史条换到下一行，形状面板随之下移一行避开它 */
+  .pm-sk-shapes {
+    top: 140px;
+    max-width: calc(100% - 24px);
+  }
   .pm-sk-hist button,
   .pm-sk-close {
     width: 34px;
@@ -496,13 +600,18 @@
     right: 16px;
     bottom: 18px;
   }
-  /* 四个工具按钮的胶囊居中后会撞上右侧历史条，历史条换到下一行 */
+  /* 四个工具按钮的胶囊居中后会撞上右侧历史条，历史条换到下一行
+     （胶囊高 46px：top 16 起，62 会与它擦边，下移到 66 留出间隔） */
   .pm-sk-hist {
-    top: 62px;
+    top: 66px;
     right: 14px;
   }
   .pm-sk-meta {
     display: none;
+  }
+  .pm-sk-fit,
+  .pm-sk-gesture-hint {
+    left: 14px;
   }
   .pm-sk-sv {
     height: 120px;

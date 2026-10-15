@@ -321,6 +321,9 @@ export const en = {
   },
 
   sketch: {
+    fit: "Fit to screen",
+    zoomPercent: "{{percent}}%",
+    gestureHint: "Two fingers: zoom & pan · Tap % to reset",
     board: "Sketch board",
     hint: "Sketch the composition on the paper: positions, outlines, color blocks",
     close: "Close board",
@@ -328,8 +331,18 @@ export const en = {
     pen: "Pen",
     textDisabled: "Text (not available yet)",
     textTitle: "Text · not available yet",
-    shapeDisabled: "Shapes (not available yet)",
-    shapeTitle: "Shapes · not available yet",
+    shape: "Shapes",
+    shapeOptions: "Shape options",
+    shapeKind: {
+      rect: "Rectangle",
+      ellipse: "Ellipse",
+      line: "Line",
+      arrow: "Arrow",
+    },
+    fill: {
+      none: "Outline",
+      solid: "Filled",
+    },
     eraser: "Eraser",
     history: "Undo, redo and clear",
     clear: "Clear",

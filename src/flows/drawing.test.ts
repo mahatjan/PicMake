@@ -30,7 +30,8 @@ import {
   openSketch,
   patchForm,
   setConfirm,
-  strokeDrawing,
+  strokeMask,
+  strokeSketch,
 } from "../store/workspace/actions";
 import {
   confirmInpaint,
@@ -163,7 +164,7 @@ describe("editSketchAttachment", () => {
 describe("confirmSketch", () => {
   const open = () => {
     openSketch(blankSketch(100, 80), { kind: "new" }, null);
-    strokeDrawing(stroke(1));
+    strokeSketch(stroke(1));
     return state().drawing!.id;
   };
 
@@ -260,7 +261,7 @@ describe("requestCloseSketch", () => {
 
   it("有修改：先确认；确认只关闭发起时的会话", () => {
     openSketch(blankSketch(10, 10), { kind: "new" }, null);
-    strokeDrawing(stroke(1));
+    strokeSketch(stroke(1));
     requestCloseSketch();
     expect(state().drawing).not.toBeNull();
     expect(state().confirm?.title).toBe("放弃本次草图修改？");
@@ -273,7 +274,7 @@ describe("requestCloseSketch", () => {
 
   it("确认导出中：忽略", () => {
     openSketch(blankSketch(10, 10), { kind: "new" }, null);
-    strokeDrawing(stroke(1));
+    strokeSketch(stroke(1));
     useWorkspace.setState((s) => ({
       drawing: s.drawing && ({ ...s.drawing, confirming: true } as never),
     }));
@@ -453,7 +454,7 @@ describe("requestCloseInpaint", () => {
 
   it("有涂选：先确认", () => {
     openInpaintSession();
-    strokeDrawing({
+    strokeMask({
       type: "stroke",
       tool: "brush",
       size: 20,

@@ -92,7 +92,24 @@ export interface SketchClear {
   type: "clear";
 }
 
-export type SketchCommand = SketchStroke | SketchClear;
+/** 形状种类；line 与 arrow 无填充 */
+export type SketchShapeKind = "rect" | "ellipse" | "line" | "arrow";
+
+/** rect 与 ellipse 的空心 / 实心 */
+export type SketchFill = "none" | "solid";
+
+/** 一个形状 = 一次完整拖动（起终点为逻辑画布坐标，几何在提交前已定稿） */
+export interface SketchShape {
+  type: "shape";
+  shape: SketchShapeKind;
+  fill: SketchFill;
+  color: string;
+  width: number;
+  from: SketchPoint;
+  to: SketchPoint;
+}
+
+export type SketchCommand = SketchStroke | SketchShape | SketchClear;
 
 export interface SketchDocument {
   version: 1;
@@ -106,10 +123,17 @@ export const MAX_INPUT_BYTES = 50 * 1024 * 1024;
 
 /** 局部重绘 */
 
-/** 一笔 = 一次完整拖动或一次单击（圆点）；画笔扩大覆盖，擦除减少覆盖 */
-/** width 为底图像素单位的笔刷直径，缩放不改变已有笔宽。 */
-export type MaskStroke = Omit<SketchStroke, "color">;
+/** 一笔 = 一次完整拖动或一次单击（圆点）；画笔扩大覆盖，擦除减少覆盖。
+ *  width 为底图像素单位的笔刷直径，缩放不改变已有笔宽。
+ *  逐字段声明而非从 SketchStroke 派生：选区只认笔触，形状命令结构上就进不来。 */
+export interface MaskStroke {
+  type: "stroke";
+  tool: "pen" | "eraser";
+  width: number;
+  points: SketchPoint[];
+}
 
+/** 只含笔触与清空；草图专属的形状命令不属于选区 */
 export type MaskCommand = MaskStroke | SketchClear;
 
 /** 绑定实际请求底图的选区文档（baseImageId ≠ 方向归一前的原文件） */

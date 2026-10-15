@@ -13,7 +13,8 @@ async function configure(page: Page) {
   const dialog = page.getByRole("dialog", { name: "设置" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("API 地址").fill(MOCK);
-  await dialog.getByLabel("API Key").fill("mock-key");
+  // 设置里另有「视频 API Key」，子串匹配会命中两个字段
+  await dialog.getByLabel("API Key", { exact: true }).fill("mock-key");
   await dialog.getByRole("button", { name: "保存" }).click();
   await expect(dialog).toBeHidden();
 }
