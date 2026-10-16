@@ -11,6 +11,7 @@ const locales = [
     add: "新增配置",
     remove: "删除配置",
     base: "API 地址",
+    videoKey: "API Key（生视频）",
     save: "保存",
     test: "测试连接",
     connected: "连接成功",
@@ -28,6 +29,7 @@ const locales = [
     add: "Add profile",
     remove: "Delete profile",
     base: "API URL",
+    videoKey: "API Key (video)",
     save: "Save",
     test: "Test connection",
     connected: "Connected",
@@ -196,7 +198,9 @@ for (const text of locales) {
       await expect(key).toHaveValue("original-key");
     });
 
-    test("旧设置迁移，中英文窄屏长名称布局和密码字段", async ({ page }) => {
+    test("旧设置迁移，中英文窄屏长名称布局和文本 Key 字段", async ({
+      page,
+    }) => {
       await page.setViewportSize({ width: 390, height: 844 });
       await page.addInitScript(() => {
         localStorage.setItem(
@@ -229,7 +233,10 @@ for (const text of locales) {
       );
       const key = dialog.getByLabel("API Key", { exact: true });
       await expect(key).toHaveValue("legacy-key");
-      await expect(key).toHaveAttribute("type", "password");
+      await expect(key).toHaveJSProperty("type", "text");
+      await expect(
+        dialog.getByLabel(text.videoKey, { exact: true }),
+      ).toHaveJSProperty("type", "text");
       await expect(dialog.getByLabel(text.base, { exact: true })).toHaveValue(
         MOCK,
       );

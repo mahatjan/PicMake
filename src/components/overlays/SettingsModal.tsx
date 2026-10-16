@@ -235,7 +235,6 @@ export function SettingsModal(props: {
             <label htmlFor="s-key">{t("settings.apiKey")}</label>
             <Input
               id="s-key"
-              type="password"
               autoComplete="off"
               value={apiKey}
               onChange={(e) => patchProfile({ apiKey: e.target.value })}
@@ -258,7 +257,6 @@ export function SettingsModal(props: {
             <label htmlFor="s-video-key">{t("settings.videoKey")}</label>
             <Input
               id="s-video-key"
-              type="password"
               autoComplete="off"
               value={videoApiKey}
               onChange={(e) => setVideoApiKey(e.target.value)}

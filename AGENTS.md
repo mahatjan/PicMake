@@ -127,6 +127,7 @@ axios、openai SDK、ESLint（用 oxlint）、TanStack Query、Redux、react-rou
 
 ## 7. 验证与交付
 
+- **用户偏好（覆盖下方默认测试要求）**：后续默认不运行测试（包括 `pnpm test`、`pnpm e2e`）；只做错误检查。用户明确要求时再运行测试。
 - **代码改动**：执行 `pnpm lint` 和 `pnpm build`；格式使用 Prettier，仅处理本次修改的文件。
 - **纯函数与 store 迁移函数的行为改动**：执行 `pnpm test`，必要时补充边界用例。vitest 在 node 环境测 `src/**/*.test.ts`：`lib/` 纯函数，以及 `store/workspace/` 的迁移函数与 selector（不依赖 DOM），验证输入输出、状态变化与非法输入拦截；不为内部重构编写绑定实现细节的测试。flows 依赖 IndexedDB、网络与 toast，除非能用假实现隔离（如 `history-sync.test.ts`），否则按下一条在浏览器验证。
 - **UI 改动**：先跑 `pnpm e2e` 确认主流程（配置、生成、取消、错误、草图、局部重绘）没被破坏；再在浏览器验证受影响的交互与状态，包括键盘操作、错误与禁用状态；构建通过不能替代交互验证。生成、取消、报错路径可用 `pnpm mock` 覆盖。
