@@ -76,6 +76,7 @@ i18n/ ──► lib/                           文案资源与「码 → 当前�
 
 - 以上"引用"指运行时引用，`import type` 放行。越层引用由 `.oxlintrc.json` 的 `no-restricted-imports` 按目录检查；"容器不写业务规则、不直接 `setState`"靠评审。
 - `src/App.tsx` 只做组合：启动历史订阅、算一次图片资源、渲染各区域容器。新增页面区域加容器，不往 App 里堆逻辑。
+- 页面区域：顶栏（`ChromeArea`）→ 首页画廊（`GalleryArea`，见 `selectGallery`）→ 结果区（`ResultArea`：舞台、详情浮卡、轮播）→ 创作条（`CreateArea`）。**画廊就是首页**：每个并行任务在网格最前各有一张生成卡，分别显示描述、进度与取消；创作条显示任务总数并提供全部取消。保存成功后留在画廊、新记录置顶；只有点开某条记录才进结果区。画廊只展示与选中记录，不新增 store 状态。
 
 ### 3.2 store 规则
 
@@ -94,7 +95,7 @@ i18n/ ──► lib/                           文案资源与「码 → 当前�
 修改异步流程时，检查重复触发、取消、过期结果及请求成功但保存失败等路径，行为以 PRD 为准。
 
 - **会话 id 判断过期**：上传读取（`draft.readId`）、画板（`drawing.id`）在开始时用 `crypto.randomUUID()` 生成；异步结果回来后与 `getState()` 里的 id 比对，不一致就丢弃。不用递增计数 ref 做 token。
-- **占位用迁移函数**：同一时间只有一次生成、一个画板。占位（`beginRun`、`beginInpaintOpening`）是"判断与写入同步完成"的迁移函数，不用 ref 加锁。
+- **占位用迁移函数**：每次提交立即创建独立生成任务，可以并行执行；同一时间仍只有一个画板。占位（`beginRun`、`beginInpaintOpening`）是"判断与写入同步完成"的迁移函数，不用 ref 加锁。生成事件、保存与取消按任务 id 隔离，AbortController 只在 flow 中按 id 管理。
 - **延迟回调重新读状态**：`confirm.onOk`、`await` 之后，守卫条件和要修改的状态一律重新 `getState()`；用户发起请求时的意图（操作哪条记录、是不是当前记录）在请求时确定并作为参数带入，不在执行时重新推断。
 - **取消**：进行中请求的 AbortController 只放在 flow 的模块变量里，不进 store。
 

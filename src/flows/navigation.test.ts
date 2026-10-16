@@ -16,14 +16,22 @@ import type { HistoryRow } from "../db/schema";
 import type { PreparedGeneration } from "../lib/generation";
 import { MAX_INPUT_IMAGES, type GenParams } from "../lib/types";
 import { initialWorkspace, useWorkspace } from "../store/workspace";
+import { selectRun } from "../store/workspace/selectors";
 import {
   beginRun,
   beginSave,
   closeConfirm,
+  finishSave,
   markUnsaved,
   patchForm,
   rowsLoaded,
   selectRecord,
+  openLightbox,
+  openPlayground,
+  openVideoEntry,
+  openVideoPreview,
+  setVideoPrompt,
+  setFocusIdx,
 } from "../store/workspace/actions";
 import {
   addAsReference,
@@ -103,7 +111,7 @@ describe("requestLeave", () => {
     expect(leave).not.toHaveBeenCalled();
     expect(state().confirm?.title).toBe("放弃未保存结果？");
     state().confirm?.onOk();
-    expect(state().run.phase).toBe("idle");
+    expect(selectRun(state()).phase).toBe("idle");
     expect(leave).toHaveBeenCalledTimes(1);
   });
 
@@ -144,17 +152,73 @@ describe("requestLeave", () => {
     requestLeave(leave);
     const { onOk } = state().confirm!;
     // 用户在确认框打开时通过其他途径丢弃并重新开始了生成
-    useWorkspace.setState({
-      run: { phase: "generating", plan, partial: null, slots: null },
-    });
+    beginRun(plan);
     onOk();
     expect(leave).not.toHaveBeenCalled();
-    expect(state().run.phase).toBe("generating");
+    expect(selectRun(state()).phase).toBe("generating");
   });
 });
 
 describe("切换与新建", () => {
-  it("selectHistory：切到目标记录并复位草稿与完成标记", () => {
+  it.each(["idle", "generating", "saving", "unsaved"] as const)(
+    "%s：从视频页选择图片历史时自动关闭视频页并保留任务与视频草稿",
+    (phase) => {
+      if (phase !== "idle") beginRun(plan);
+      if (phase === "saving" || phase === "unsaved") beginSave(prepared);
+      if (phase === "unsaved") markUnsaved();
+      openPlayground();
+      setVideoPrompt("保留的视频描述");
+      openVideoEntry("ref");
+      openVideoPreview("video-preview");
+      const { tasks, draft } = state();
+      selectHistory("a");
+      expect(state().nav.selectedId).toBe("a");
+      expect(state().view.playgroundOpen).toBe(false);
+      expect(state().video.previewId).toBeNull();
+      expect(state().video.draft.entry).toBeNull();
+      expect(state().video.draft.prompt).toBe("保留的视频描述");
+      expect(state().tasks).toBe(tasks);
+      expect(state().draft).toBe(draft);
+    },
+  );
+
+  it.each([false, true])(
+    "从视频页新建生成会退出视频页（后台任务：%s）",
+    (running) => {
+      if (running) beginRun(plan);
+      openPlayground();
+      setVideoPrompt("保留的视频描述");
+      openVideoEntry("ref");
+      openVideoPreview("video-preview");
+      const tasks = state().tasks;
+      newGeneration();
+      expect(state().nav.selectedId).toBeNull();
+      expect(state().view.playgroundOpen).toBe(false);
+      expect(state().video.previewId).toBeNull();
+      expect(state().video.draft.entry).toBeNull();
+      expect(state().video.draft.prompt).toBe("保留的视频描述");
+      expect(state().tasks).toBe(tasks);
+    },
+  );
+
+  it("新建需要放弃图片草稿时，确认后才关闭视频页", () => {
+    patchForm({ prompt: "保留的图片草稿" });
+    openPlayground();
+    newGeneration();
+    expect(state().view.playgroundOpen).toBe(true);
+    expect(state().confirm).not.toBeNull();
+    state().confirm!.onOk();
+    expect(state().view.playgroundOpen).toBe(false);
+    expect(state().nav.selectedId).toBeNull();
+  });
+
+  it("选择不存在的历史记录不关闭视频页", () => {
+    openPlayground();
+    selectHistory("missing");
+    expect(state().view.playgroundOpen).toBe(true);
+  });
+
+  it("selectHistory：切到目标记录", () => {
     selectHistory("a");
     expect(state().nav).toMatchObject({ selectedId: "a", lastDoneId: null });
   });
@@ -164,11 +228,61 @@ describe("切换与新建", () => {
     expect(state().nav.selectedId).toBeNull();
   });
 
-  it("草稿有修改时 selectHistory 不立即切换", () => {
+  it("查看历史记录保留草稿，不要求放弃修改", () => {
     patchForm({ prompt: "改过" });
+    const draft = state().draft;
     selectHistory("a");
+    expect(state().nav.selectedId).toBe("a");
+    expect(state().draft).toBe(draft);
+    expect(state().confirm).toBeNull();
+  });
+
+  it.each(["generating", "saving", "unsaved"] as const)(
+    "%s：可以切换已完成记录，并保留任务和草稿",
+    (phase) => {
+      beginRun(plan);
+      if (phase !== "generating") beginSave(prepared);
+      if (phase === "unsaved") markUnsaved();
+      patchForm({ prompt: "下一次生成的草稿" });
+      const { draft, tasks } = state();
+      selectHistory("b");
+      openLightbox("b-1");
+      setFocusIdx(0);
+      selectHistory("a");
+      expect(state().nav.selectedId).toBe("a");
+      expect(state().draft).toBe(draft);
+      expect(state().tasks).toBe(tasks);
+      expect(state().view).toMatchObject({ lightboxId: null, focusIdx: null });
+      expect(state().confirm).toBeNull();
+    },
+  );
+
+  it("后台任务保存完毕不切走正在预览的作品", () => {
+    beginRun(plan);
+    selectHistory("a");
+    openLightbox("a-1");
+    beginSave(prepared);
+    expect(state().nav.selectedId).toBe("a");
+    finishSave(prepared);
+    expect(state().nav.selectedId).toBe("a");
+    expect(state().view.lightboxId).toBe("a-1");
+  });
+
+  it("后台生成时回首页不取消任务或清空新草稿", () => {
+    beginRun(plan);
+    patchForm({ prompt: "下一张" });
+    selectHistory("a");
+    const { draft, tasks } = state();
+    newGeneration();
+    expect(state().nav.selectedId).toBeNull();
+    expect(state().draft).toBe(draft);
+    expect(state().tasks).toBe(tasks);
+    expect(state().confirm).toBeNull();
+  });
+
+  it("不存在的历史记录不改变当前查看目标", () => {
+    selectHistory("missing");
     expect(state().nav.selectedId).toBe("b");
-    expect(state().confirm).not.toBeNull();
   });
 });
 

@@ -36,6 +36,7 @@ test("输入描述生成图片，完成后保存到本地历史", async ({ page 
   await expandBar(page);
   await prompt(page).fill("雪夜的山顶小屋");
   await generate(page).click();
+  await expect(prompt(page)).toHaveValue("");
   await expect(page.getByText("生成完成 · 已保存本地")).toBeVisible();
 
   await page.getByRole("button", { name: "历史" }).click();
@@ -72,28 +73,121 @@ test("终稿只给图片 URL 时也能下载入库（中转不发 b64_json）", 
   expect(width).toBeGreaterThan(0);
 });
 
-test("生成中可以取消，取消后回到可输入状态且草稿保留", async ({ page }) => {
+test("生成中与完成后都留在首页画廊：新作品置顶，可继续生成下一条", async ({
+  page,
+}) => {
+  await configure(page);
+  await expandBar(page);
+  const gallery = page.locator(".pm-gal");
+  await prompt(page).fill("首页画廊里的骆驼");
+  await generate(page).click();
+
+  // 生成中：留在画廊，网格最前是生成卡，舞台不再画生成态
+  const genCard = gallery.locator(".pm-gal-card.is-gen");
+  await expect(genCard).toBeVisible();
+  await expect(page.locator(".pm-mtile")).toHaveCount(0);
+  await expect(page.getByLabel("新作品生成中")).toBeVisible();
+
+  await expect(page.getByText("生成完成 · 已保存本地")).toBeVisible();
+  await expect(genCard).toHaveCount(0);
+
+  // 完成后：新作品在网格最前，没有空状态引导；complete 态的动作仍然可用
+  await expect(gallery).toBeVisible();
+  await expect(
+    gallery.getByRole("button", { name: /首页画廊里的骆驼/ }),
+  ).toBeVisible();
+  await expect(page.locator(".pm-stage")).toHaveAttribute("data-mode", "home");
+  await expect(page.getByText("从一句描述开始")).toBeHidden();
+  await expect(page.getByRole("button", { name: "再来一版" })).toBeVisible();
+
+  // 可以接着写下一条：描述已清空，画廊多出一条记录
+  await page.getByRole("button", { name: "收起，回到输入" }).click();
+  await expect(prompt(page)).toHaveValue("");
+  // 输入描述时仍停在画廊，不换成空状态引导
+  await prompt(page).fill("第二条作品");
+  await expect(gallery).toBeVisible();
+  await expect(page.locator(".pm-stage")).toHaveAttribute("data-mode", "home");
+  await expect(page.getByText("从一句描述开始")).toBeHidden();
+  await generate(page).click();
+  await expect(page.getByText("生成完成 · 已保存本地")).toBeVisible();
+  await expect(
+    gallery.getByRole("button", { name: /第二条作品/ }),
+  ).toBeVisible();
+  await expect(
+    gallery.getByRole("button", { name: /首页画廊里的骆驼/ }),
+  ).toBeVisible();
+  await expect(gallery.locator(".pm-gal-card")).toHaveCount(2);
+
+  // 点开任意一条：进入该记录的详情页（图三：图片 + 详情浮卡 + 工具条）
+  await gallery.getByRole("button", { name: /首页画廊里的骆驼/ }).click();
+  await expect(gallery).toBeHidden();
+  await expect(page.locator(".pm-stage")).toHaveAttribute(
+    "data-mode",
+    "single",
+  );
+  await expect(page.getByLabel("本次生成详情")).toBeVisible();
+  // 工具条按钮：图片本身的无障碍名是「放大查看大图」，需要精确匹配
+  await expect(
+    page.getByRole("button", { name: "放大", exact: true }),
+  ).toBeVisible();
+});
+
+test("生成中提交下一条会立即并行请求，后提交的任务可先完成", async ({
+  page,
+}) => {
+  await configure(page);
+  await expandBar(page);
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().endsWith("/v1/images/generations"))
+      requests.push(request.url());
+  });
+  await prompt(page).fill("第一条慢速生成 [slow]");
+  await generate(page).click();
+  await expect(prompt(page)).toHaveValue("");
+
+  await expect(page.locator(".pm-bar-gen")).toBeVisible();
+  await prompt(page).fill("第二条并行生成");
+  await generate(page).click();
+  await expect(prompt(page)).toHaveValue("");
+  await expect(page.locator(".pm-gal-card.is-gen")).toHaveCount(2);
+  await expect(page.getByText("2 个任务同时生成中")).toBeVisible();
+  await expect.poll(() => requests.length, { timeout: 2000 }).toBe(2);
+  const gallery = page.locator(".pm-gal");
+  await expect(
+    gallery.getByRole("button", { name: /第二条并行生成/ }),
+  ).toBeVisible();
+  await expect(gallery.locator(".pm-gal-card.is-gen")).toHaveCount(1);
+  await expect(page.locator(".pm-bar-gen")).toBeVisible();
+  await expect(page.locator(".pm-bar-gen")).toBeHidden({ timeout: 15000 });
+  await expect(page.getByText("生成完成 · 已保存本地")).toBeVisible({
+    timeout: 15000,
+  });
+});
+test("生成中可以取消，取消后回到空白输入状态", async ({ page }) => {
   await configure(page);
   await expandBar(page);
   await prompt(page).fill("慢速生成 [slow]");
   await generate(page).click();
-  const cancel = page.getByRole("button", { name: "取消生成" });
+  await expect(prompt(page)).toHaveValue("");
+  // 取消入口在创作条上（生成卡不可点），画廊的生成卡随取消消失
+  const cancel = page.locator(".pm-bar").getByRole("button", { name: "取消" });
   await expect(cancel).toBeVisible();
+  await expect(page.locator(".pm-gal-card.is-gen")).toBeVisible();
   await cancel.click();
   await expect(cancel).toBeHidden();
-  await expect(prompt(page)).toHaveValue("慢速生成 [slow]");
+  await expect(page.locator(".pm-gal-card.is-gen")).toHaveCount(0);
+  await expect(prompt(page)).toHaveValue("");
   await expect(page.getByText("生成完成 · 已保存本地")).toBeHidden();
 });
 
-test("服务端返回 401：提示 Key 问题，草稿保留，不产生历史", async ({
-  page,
-}) => {
+test("服务端返回 401：提示 Key 问题，不产生历史", async ({ page }) => {
   await configure(page);
   await expandBar(page);
   await prompt(page).fill("错误场景 [401]");
   await generate(page).click();
   await expect(page.getByText(/API Key 无效/)).toBeVisible();
-  await expect(prompt(page)).toHaveValue("错误场景 [401]");
+  await expect(prompt(page)).toHaveValue("");
 
   await page.getByRole("button", { name: "历史" }).click();
   const drawer = page.getByRole("dialog", { name: "生成历史" });
@@ -252,6 +346,8 @@ test("局部重绘：上传底图、涂选、生成，并能查看保存的选�
   await page.getByRole("button", { name: "生成重绘结果" }).click();
   await expect(page.getByText("生成完成 · 已保存本地")).toBeVisible();
 
+  // 生成后停在画廊；点开这条重绘记录才看到它的详情浮卡
+  await page.locator(".pm-gal-card").first().click();
   await page.getByRole("button", { name: "查看选区" }).click();
   const view = page.getByRole("dialog", { name: "查看选区" });
   await expect(view).toBeVisible();

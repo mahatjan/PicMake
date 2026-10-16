@@ -25,6 +25,7 @@ import {
 import { initialWorkspace, useWorkspace } from "../store/workspace";
 import {
   beginRun,
+  beginSave,
   closeDrawing,
   initializeDraft,
   openInpaint,
@@ -128,7 +129,13 @@ describe("openSketchNew", () => {
   });
 
   it.each([
-    ["生成中", () => beginRun({ n: 1, size: "auto" })],
+    [
+      "结果还在内存里",
+      () => {
+        beginRun({ n: 1, size: "auto" });
+        beginSave({ row: {} } as never);
+      },
+    ],
     ["已有画板", () => openSketch(blankSketch(8, 8), { kind: "new" }, null)],
     ["确认框打开", () => setConfirm({ title: "t", desc: "d", onOk: () => {} })],
   ])("%s：忽略", (_, setup) => {
@@ -136,6 +143,12 @@ describe("openSketchNew", () => {
     const before = state().drawing;
     openSketchNew();
     expect(state().drawing).toBe(before);
+  });
+
+  it("生成中：照常打开（请求按提交时的快照发出，之后改草稿不影响它）", () => {
+    beginRun({ n: 1, size: "auto" });
+    openSketchNew();
+    expect(state().drawing).toMatchObject({ kind: "sketch" });
   });
 });
 
@@ -472,10 +485,27 @@ describe("startInpaintFromInput", () => {
     );
   });
 
-  it("读取来源图期间开始了生成：不再打开", async () => {
+  it("读取来源图期间开始了生成：照常打开（请求已按提交时的快照发出，草稿改动不影响它）", async () => {
     initializeDraft(undefined, [input("src")]); // 无 upload：需要读库
     vi.mocked(db.images.get).mockImplementation((async () => {
       beginRun({ n: 1, size: "auto" });
+      return image("src");
+    }) as never);
+    vi.mocked(readImageMeta).mockResolvedValue(meta);
+    vi.mocked(prepareInpaintBase).mockResolvedValue({
+      ok: true,
+      base: image("base", 1024, 768),
+    });
+    startInpaintFromInput("src");
+    await flush();
+    expect(state().drawing?.kind).toBe("inpaint");
+  });
+
+  it("读取来源图期间结果还没保存下来：不再打开", async () => {
+    initializeDraft(undefined, [input("src")]); // 无 upload：需要读库
+    vi.mocked(db.images.get).mockImplementation((async () => {
+      beginRun({ n: 1, size: "auto" });
+      beginSave({ row: { id: "a" }, images: [], sources: [] } as never);
       return image("src");
     }) as never);
     startInpaintFromInput("src");

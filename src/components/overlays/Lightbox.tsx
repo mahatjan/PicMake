@@ -30,11 +30,10 @@ export function Lightbox(props: {
         <X size={15} />
       </button>
       <div className="pm-lb-wrap">
-        <div
+        <img
           className="pm-lb-im"
-          style={{ backgroundImage: `url(${props.img.url})` }}
-          role="img"
-          aria-label={props.prompt}
+          src={props.img.url}
+          alt={props.prompt}
           onClick={props.onClose}
         />
         <div className="pm-lb-bar">

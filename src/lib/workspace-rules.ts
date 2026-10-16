@@ -9,7 +9,11 @@ import {
   type ParamIssue,
 } from "./params";
 import { sketchSnapshotKey } from "./sketch";
-import type { GenParams, InpaintDraft, SketchDocument } from "./types";
+import {
+  type GenParams,
+  type InpaintDraft,
+  type SketchDocument,
+} from "./types";
 import type { InpaintBarInfo } from "./view-models";
 
 /** 生成生命周期：saving = 请求成功、正在写库；unsaved = 保存失败，结果留在内存 */
@@ -36,14 +40,29 @@ export function leaveDecision(s: {
   return s.userWork ? "confirm-draft" : "ok";
 }
 
-/** 草图与局部重绘入口：空闲、不在读取、没有确认框和已打开的画板 */
+/** 提交当前草稿：立即发起，或先确认放弃当前未保存结果。 */
+export type SubmitDecision = "run" | "confirm-unsaved";
+
+/** 生成中、保存中仍立即发起独立任务；未保存结果先确认再替换。 */
+export function submitDecision(s: { run: RunPhase }): SubmitDecision {
+  if (s.run === "unsaved") return "confirm-unsaved";
+  return "run";
+}
+
+/** 草图与局部重绘入口：空闲与生成中都可以开（请求按提交时的快照发出，此后的草稿改动不影响它）；
+ *  saving/unsaved 时结果还在内存里，不打断；读取中、有确认框或已打开画板时同样不可 */
 export function canOpenDrawing(s: {
   run: RunPhase;
   reading: boolean;
   confirming: boolean;
   drawing: boolean;
 }): boolean {
-  return s.run === "idle" && !s.reading && !s.confirming && !s.drawing;
+  return (
+    (s.run === "idle" || s.run === "generating") &&
+    !s.reading &&
+    !s.confirming &&
+    !s.drawing
+  );
 }
 
 /** 视频工作台：画板打开时不进入，避免两层编辑叠在一起 */
@@ -62,7 +81,8 @@ export function isDrawingChanged(d: {
   return d.cursor > 0 && sketchSnapshotKey(d.doc, d.cursor) !== d.openKey;
 }
 
-/** 舞台滚轮切换记录：空闲、草稿未改动且无输入图、没有弹层、画板和确认框 */
+/** 舞台滚轮切换记录：空闲、草稿未改动且无输入图、没有弹层、画板和确认框，且不在首页画廊。
+ *  画廊自身要滚动，此时滚轮不能用来切记录 */
 export function canWheelSwitch(s: {
   run: RunPhase;
   userWork: boolean;
@@ -71,6 +91,8 @@ export function canWheelSwitch(s: {
   overlayOpen: boolean;
   drawing: boolean;
   confirming: boolean;
+  /** 舞台上没有展示中的记录、正在看首页画廊 */
+  atHome: boolean;
 }): boolean {
   return (
     s.run === "idle" &&
@@ -78,7 +100,8 @@ export function canWheelSwitch(s: {
     s.inputCount === 0 &&
     !s.overlayOpen &&
     !s.drawing &&
-    !s.confirming
+    !s.confirming &&
+    !s.atHome
   );
 }
 

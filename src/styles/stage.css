@@ -32,6 +32,17 @@
   place-items: center;
   padding-bottom: 150px;
 }
+/* 首页画廊盖住舞台时：舞台不留任何可见内容（生成态、结果、背景、空状态都不画），
+   只保留节点本身，作为滚轮监听的挂载点 */
+.pm-stage.is-hidden {
+  background: none;
+}
+.pm-stage.is-hidden > *:not(.pm-stage-bg) {
+  display: none;
+}
+.pm-stage.is-hidden > .pm-stage-bg {
+  visibility: hidden;
+}
 .pm-stage-bg {
   position: absolute;
   /* 放大后再由舞台裁切，模糊取样不到透明边缘，顶部不会晕出一块盖住导航 */
@@ -164,6 +175,177 @@
 }
 .pm-ghost-cta svg {
   color: var(--pm-accent);
+}
+
+/* ── 首页作品画廊：有历史记录时的默认页面。自成一层滚动容器，
+      顶部避开浮岛、底部按创作条上沿（--pm-bar-top，见 useCreateBarInset）留白 ── */
+.pm-gal {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 92px 28px calc(150px + max(0px, var(--pm-bar-top, 0px) + 16px));
+}
+.pm-gal-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 1180px;
+  margin: 0 auto 14px;
+}
+.pm-gal-h b {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--pm-text-1);
+}
+.pm-gal-h span {
+  font-size: 12px;
+  color: var(--pm-text-3);
+  font-variant-numeric: tabular-nums;
+}
+.pm-gal-grid {
+  list-style: none;
+  display: grid;
+  grid-template-columns: var(--pm-gal-grid);
+  gap: 18px;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+.pm-gal-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--pm-panel-solid);
+  border: 1px solid var(--pm-line);
+  box-shadow: var(--pm-shadow-lg);
+  transition:
+    transform 0.14s,
+    border-color 0.14s;
+}
+.pm-gal-card:hover {
+  transform: translateY(-3px);
+}
+.pm-gal-card:focus-visible {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 2px;
+}
+.pm-gal-card img,
+.pm-gal-ph {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3/2;
+  object-fit: cover;
+  background: var(--pm-surface-faint);
+}
+/* 生成卡：网格第一格，点阵在缩略图区里波动；渐进预览到达后原位淡入 */
+.pm-gal-card.is-gen {
+  cursor: default;
+  box-shadow:
+    var(--pm-shadow-lg),
+    0 0 0 1px var(--pm-accent-border);
+}
+.pm-gal-card.is-gen .pm-gal-thumb {
+  position: relative;
+  aspect-ratio: 3/2;
+  overflow: hidden;
+  background: var(--pm-surface-faint);
+}
+.pm-gal-card.is-gen .pm-gal-p {
+  color: var(--pm-text-3);
+}
+.pm-gal-genimg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(14px);
+  transition: filter 0.45s;
+  animation: pm-gen-in 0.7s ease both;
+}
+/* 多尺寸生成卡：卡内列出每个比例的状态，失败的给出错误标题（与舞台上同一套文案） */
+.pm-gal-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+}
+.pm-gal-slot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--pm-text-3);
+  font-variant-numeric: tabular-nums;
+}
+.pm-gal-slotcap {
+  flex: none;
+}
+.pm-gal-slotmsg {
+  min-width: 0;
+  text-align: right;
+  color: var(--pm-error);
+  overflow-wrap: anywhere;
+}
+.pm-gal-slot.failed .pm-gal-slotcap {
+  color: var(--pm-error);
+}
+.pm-gal-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px 12px;
+}
+.pm-gal-p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--pm-text-1);
+  overflow-wrap: anywhere;
+}
+.pm-gal-meta {
+  font-size: 11.5px;
+  color: var(--pm-text-3);
+  font-variant-numeric: tabular-nums;
+}
+.pm-gal-taskrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pm-gal-taskrow .pm-bar-cancel {
+  flex: none;
+  margin-left: 0;
+}
+@media (max-width: 760px) {
+  .pm-gal {
+    --pm-gal-grid: repeat(auto-fill, minmax(150px, 1fr));
+    padding: 68px 14px calc(120px + max(0px, var(--pm-bar-top, 0px) + 16px));
+  }
+  .pm-gal-grid {
+    gap: 12px;
+  }
+  .pm-gal-txt {
+    padding: 8px 10px 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pm-gal-card {
+    transition: none;
+  }
+  .pm-gal-card:hover {
+    transform: none;
+  }
 }
 
 /* 生成中：占位卡与最终结果同几何（pm-single / pm-grid4），完成时图片原位替换点阵 */

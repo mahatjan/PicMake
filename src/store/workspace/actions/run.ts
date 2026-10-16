@@ -1,14 +1,21 @@
-/** 生成生命周期迁移函数：占位、partial、保存、未保存 */
+﻿/** 每次提交独立的生成生命周期；迟到事件必须按任务 id 匹配。 */
 import type { PreparedGeneration } from "../../../lib/generation";
 import type { ApiErrorKind } from "../../../lib/types";
 import type { GenPlan } from "../../../lib/view-models";
-import { useWorkspace, type RunSlot } from "../index";
+import { uuid } from "../../../lib/uuid";
+import { useWorkspace, type GenerationTask, type RunSlot } from "../index";
 import { set, freshDraft } from "./internal";
 
-/** 开始生成：只有空闲时能占位，判断与写入同步完成；同时清空选中、完成标记、过渡结果与查看状态。
- *  plan.sizes 存在（多尺寸）时，每个尺寸占一个槽位 */
-export function beginRun(plan: GenPlan): boolean {
-  if (useWorkspace.getState().run.phase !== "idle") return false;
+export function beginRun(
+  plan: GenPlan,
+  task = {
+    id: uuid(),
+    prompt: useWorkspace.getState().draft.form.prompt,
+    model: useWorkspace.getState().draft.form.model,
+  },
+): boolean {
+  if (useWorkspace.getState().tasks.some((item) => item.id === task.id))
+    return false;
   const slots: RunSlot[] | null = plan.sizes
     ? plan.sizes.map((size) => ({
         size,
@@ -19,85 +26,131 @@ export function beginRun(plan: GenPlan): boolean {
       }))
     : null;
   set((s) => ({
-    run: { phase: "generating", plan, partial: null, slots },
-    history: { ...s.history, recent: null },
+    tasks: [
+      {
+        ...task,
+        run: { phase: "generating", plan, partial: null, slots },
+        submittedDraft: s.draft,
+      },
+      ...s.tasks,
+    ],
+    history: { ...s.history, recent: s.tasks.length ? s.history.recent : null },
     nav: { ...s.nav, selectedId: null, lastDoneId: null },
     view: { ...s.view, focusIdx: null, lightboxId: null, previewId: null },
   }));
   return true;
 }
 
-/** partial 预览：只在生成中更新，取消后才到达的直接忽略 */
-export const setPartial = (blob: Blob, index: number) =>
-  set((s) =>
-    s.run.phase === "generating"
-      ? { run: { ...s.run, partial: { blob, index } } }
-      : s,
-  );
-
-/** 改一个槽位：只在生成中、槽位还在运行时生效，取消后才到达的事件直接忽略 */
-const updateSlot = (index: number, update: (slot: RunSlot) => RunSlot) =>
+const updateTask = (
+  id: string | undefined,
+  update: (task: GenerationTask) => GenerationTask,
+) =>
   set((s) => {
-    if (s.run.phase !== "generating" || !s.run.slots) return s;
-    const slot = s.run.slots[index];
-    if (!slot || slot.status !== "running") return s;
-    const slots = s.run.slots.map((item, at) =>
-      at === index ? update(item) : item,
-    );
-    return { run: { ...s.run, slots } };
+    const task = id ? s.tasks.find((item) => item.id === id) : s.tasks[0];
+    if (!task) return s;
+    const next = update(task);
+    return next === task
+      ? s
+      : { tasks: s.tasks.map((item) => (item === task ? next : item)) };
   });
 
-/** 多尺寸：某个请求的渐进预览 */
-export const setSlotPartial = (index: number, partial: Blob) =>
-  updateSlot(index, (slot) => ({ ...slot, partial }));
-
-/** 多尺寸：某个请求完成，终稿在原位显示 */
-export const setSlotDone = (index: number, final: Blob) =>
-  updateSlot(index, (slot) => ({
-    ...slot,
-    status: "done",
-    partial: null,
-    final,
-  }));
-
-/** 多尺寸：某个请求失败，其余请求继续 */
-export const setSlotFailed = (index: number, failure: ApiErrorKind) =>
-  updateSlot(index, (slot) => ({
-    ...slot,
-    status: "failed",
-    partial: null,
-    failure,
-  }));
-
-/** 生成结束于取消或失败：回到空闲，草稿保留 */
-export const endRun = () =>
-  set((s) => (s.run.phase === "generating" ? { run: { phase: "idle" } } : s));
-
-/** 请求成功、开始写库：结果先在舞台展示 */
-export const beginSave = (prepared: PreparedGeneration) =>
-  set({ run: { phase: "saving", prepared } });
-
-/** 写库失败：结果留在内存，可查看、下载；离开前需确认放弃 */
-export const markUnsaved = () =>
-  set((s) =>
-    s.run.phase === "saving"
-      ? { run: { phase: "unsaved", prepared: s.run.prepared } }
-      : s,
+export const setPartial = (blob: Blob, index: number, id?: string) =>
+  updateTask(id, (task) =>
+    task.run.phase === "generating"
+      ? { ...task, run: { ...task.run, partial: { blob, index } } }
+      : task,
   );
 
-/** 放弃未保存的结果 */
-export const discardUnsaved = () =>
-  set((s) => (s.run.phase === "unsaved" ? { run: { phase: "idle" } } : s));
+const updateSlot = (
+  index: number,
+  update: (slot: RunSlot) => RunSlot,
+  id?: string,
+) =>
+  updateTask(id, (task) => {
+    const run = task.run;
+    if (run.phase !== "generating" || !run.slots) return task;
+    const slot = run.slots[index];
+    if (!slot || slot.status !== "running") return task;
+    return {
+      ...task,
+      run: {
+        ...run,
+        slots: run.slots.map((item, at) =>
+          at === index ? update(item) : item,
+        ),
+      },
+    };
+  });
 
-/** 保存成功：选中新记录并进入 complete 态，草稿重置（保留参数）；列表回推前由 recent 过渡显示 */
-export const finishSave = (prepared: PreparedGeneration) =>
-  set((s) => ({
-    run: { phase: "idle" },
-    history: { ...s.history, recent: prepared },
-    nav: {
-      selectedId: prepared.row.id,
-      returnId: null,
-      lastDoneId: prepared.row.id,
-    },
-    draft: freshDraft(s.draft),
-  }));
+export const setSlotPartial = (index: number, partial: Blob, id?: string) =>
+  updateSlot(index, (slot) => ({ ...slot, partial }), id);
+export const setSlotDone = (index: number, final: Blob, id?: string) =>
+  updateSlot(
+    index,
+    (slot) => ({ ...slot, status: "done", partial: null, final }),
+    id,
+  );
+export const setSlotFailed = (
+  index: number,
+  failure: ApiErrorKind,
+  id?: string,
+) =>
+  updateSlot(
+    index,
+    (slot) => ({ ...slot, status: "failed", partial: null, failure }),
+    id,
+  );
+
+/** 只结束指定任务，其他生成和未保存结果不受影响。 */
+export const endRun = (id?: string) =>
+  set((s) => {
+    const task = id ? s.tasks.find((item) => item.id === id) : s.tasks[0];
+    return task?.run.phase === "generating"
+      ? { tasks: s.tasks.filter((item) => item !== task) }
+      : s;
+  });
+
+export const beginSave = (prepared: PreparedGeneration, id?: string) =>
+  updateTask(id, (task) =>
+    task.run.phase === "generating"
+      ? { ...task, run: { phase: "saving", prepared } }
+      : task,
+  );
+export const markUnsaved = (id?: string) =>
+  updateTask(id, (task) =>
+    task.run.phase === "saving"
+      ? { ...task, run: { phase: "unsaved", prepared: task.run.prepared } }
+      : task,
+  );
+export const discardUnsaved = (id?: string) =>
+  set((s) => {
+    const task = id
+      ? s.tasks.find((item) => item.id === id)
+      : s.tasks.find((item) => item.run.phase === "unsaved");
+    return task?.run.phase === "unsaved"
+      ? { tasks: s.tasks.filter((item) => item !== task) }
+      : s;
+  });
+
+/** 保存只收尾自己的任务；其他任务仍显示，新的草稿和已打开画板不被复位。 */
+export const finishSave = (prepared: PreparedGeneration, id?: string) =>
+  set((s) => {
+    const task = id ? s.tasks.find((item) => item.id === id) : s.tasks[0];
+    if (id && task?.run.phase !== "saving") return s;
+    const tasks = s.tasks.filter((item) => item !== task);
+    const active = tasks.some((item) => item.run.phase !== "unsaved");
+    const sameDraft = !task || s.draft === task.submittedDraft;
+    return {
+      tasks,
+      history: { ...s.history, recent: prepared },
+      nav: {
+        ...s.nav,
+        lastDoneId: prepared.row.id,
+        ...(active ? {} : { returnId: null }),
+      },
+      draft:
+        s.draft.dirty || !sameDraft || active || s.drawing
+          ? s.draft
+          : freshDraft(s.draft),
+    };
+  });

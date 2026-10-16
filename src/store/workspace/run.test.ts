@@ -9,6 +9,7 @@ import {
   endRun,
   finishSave,
   initializeDraft,
+  markSubmitted,
   markUnsaved,
   openDrawer,
   openLightbox,
@@ -30,6 +31,7 @@ import {
   findRow,
   selectDisplayRow,
   selectPending,
+  selectRun,
   selectRunDone,
   selectRunTotal,
   selectSelectedImageId,
@@ -59,6 +61,17 @@ beforeEach(() => {
 });
 
 describe("生成生命周期", () => {
+  it("markSubmitted：只清空描述，保留参数、输入图与提交前快照", () => {
+    initializeDraft(undefined, [{ imageId: "reference" }]);
+    patchForm({ prompt: "猫", ratio: "9:16", quality: "high" });
+    const before = state().draft;
+    markSubmitted();
+    expect(state().draft.form).toEqual({ ...before.form, prompt: "" });
+    expect(state().draft.inputs).toBe(before.inputs);
+    expect(state().draft.dirty).toBe(false);
+    expect(before.form.prompt).toBe("猫");
+  });
+
   it("beginRun：只能从 idle 进入；清空选中、完成标记、过渡结果与查看状态，保留返回目标与草稿", () => {
     finishSave(prepared("old"));
     setReturnId("src");
@@ -68,7 +81,7 @@ describe("生成生命周期", () => {
     setPreviewId("in");
     openDrawer();
     expect(beginRun(plan)).toBe(true);
-    expect(state().run).toEqual({
+    expect(selectRun(state())).toEqual({
       phase: "generating",
       plan,
       partial: null,
@@ -89,17 +102,22 @@ describe("生成生命周期", () => {
     expect(state().draft.form.prompt).toBe("猫");
 
     const before = state();
-    expect(beginRun({ n: 2, size: "auto" })).toBe(false);
+    const id = state().tasks[0].id;
+    expect(beginRun(plan, { id, prompt: "duplicate", model: "flare" })).toBe(
+      false,
+    );
     expect(state()).toBe(before);
+    expect(beginRun({ n: 2, size: "auto" })).toBe(true);
+    expect(state().tasks).toHaveLength(2);
   });
 
   it("setPartial：只在生成中更新，其余阶段忽略", () => {
     const blob = new Blob();
     setPartial(blob, 0);
-    expect(state().run).toEqual({ phase: "idle" });
+    expect(selectRun(state())).toEqual({ phase: "idle" });
     beginRun(plan);
     setPartial(blob, 2);
-    expect(state().run).toMatchObject({ partial: { blob, index: 2 } });
+    expect(selectRun(state())).toMatchObject({ partial: { blob, index: 2 } });
     beginSave(prepared("a"));
     const before = state();
     setPartial(new Blob(), 3);
@@ -110,12 +128,12 @@ describe("生成生命周期", () => {
     patchForm({ prompt: "猫" });
     beginRun(plan);
     endRun();
-    expect(state().run).toEqual({ phase: "idle" });
+    expect(selectRun(state())).toEqual({ phase: "idle" });
     expect(state().draft).toMatchObject({ dirty: true });
     beginRun(plan);
     beginSave(prepared("a"));
     endRun();
-    expect(state().run.phase).toBe("saving");
+    expect(selectRun(state()).phase).toBe("saving");
   });
 
   it("保存失败：saving → unsaved，结果留在内存并作为展示记录；放弃后回到 idle", () => {
@@ -125,10 +143,10 @@ describe("生成生命周期", () => {
     expect(selectPending(state())).toBe(p);
     expect(selectDisplayRow(state())).toBe(p.row);
     markUnsaved();
-    expect(state().run).toEqual({ phase: "unsaved", prepared: p });
+    expect(selectRun(state())).toEqual({ phase: "unsaved", prepared: p });
     expect(selectDisplayRow(state())).toBe(p.row);
     discardUnsaved();
-    expect(state().run).toEqual({ phase: "idle" });
+    expect(selectRun(state())).toEqual({ phase: "idle" });
     expect(selectPending(state())).toBeNull();
   });
 
@@ -140,39 +158,57 @@ describe("生成生命周期", () => {
     beginRun(plan);
     beginSave(prepared("a"));
     discardUnsaved();
-    expect(state().run.phase).toBe("saving");
+    expect(selectRun(state()).phase).toBe("saving");
   });
 
-  it("finishSave：选中新记录并进入 complete 态，草稿重置但保留参数", () => {
+  it("finishSave：留在首页画廊并进入 complete 态，草稿重置但保留参数", () => {
     const p = prepared("a");
     patchForm({ prompt: "猫", quality: "high" });
     setReturnId("src");
+    markSubmitted();
     beginRun(plan);
     beginSave(p);
     finishSave(p);
-    expect(state().run).toEqual({ phase: "idle" });
+    expect(selectRun(state())).toEqual({ phase: "idle" });
     expect(state().history.recent).toBe(p);
+    // 不选中新记录：画廊据此展示它（列表回推前由 recent 过渡）
     expect(state().nav).toEqual({
-      selectedId: "a",
+      selectedId: null,
       returnId: null,
       lastDoneId: "a",
     });
     expect(state().draft).toMatchObject({ inputs: [], dirty: false });
     expect(state().draft.form).toMatchObject({ prompt: "", quality: "high" });
   });
+
+  it("finishSave：提交后草稿又被改过（正在写下一条）就原样留着，不冲掉", () => {
+    const p = prepared("a");
+    patchForm({ prompt: "猫" });
+    markSubmitted();
+    beginRun(plan);
+    // 生成期间用户接着写下一条
+    patchForm({ prompt: "狗" });
+    beginSave(p);
+    finishSave(p);
+    expect(state().draft).toMatchObject({ dirty: true });
+    expect(state().draft.form.prompt).toBe("狗");
+  });
 });
 
 describe("展示记录", () => {
-  it("列表回推前用刚保存的结果过渡；回推后取列表里的记录", () => {
+  it("列表回推前不占着舞台（画廊展示刚保存的记录）；点开它才从列表取记录", () => {
     const p = prepared("a");
     rowsLoaded([row("old")]);
     finishSave(p);
-    expect(selectDisplayRow(state())).toBe(p.row);
+    // 没有选中：舞台无展示记录，画廊负责显示新记录
+    expect(state().nav.selectedId).toBeNull();
+    expect(selectDisplayRow(state())).toBeNull();
     const listed = row("a", p.row.imageIds);
     rowsLoaded([listed, row("old")]);
-    expect(state().nav.selectedId).toBe("a");
-    expect(selectDisplayRow(state())).toBe(listed);
     expect(state().history.recent).toBe(p);
+    // 点开该记录后从列表解析
+    selectRecord("a");
+    expect(selectDisplayRow(state())).toBe(listed);
   });
 
   it("过渡结果只对它自己的 id 生效；删除后不再从内存显示", () => {
@@ -259,7 +295,7 @@ describe("resetWorkspace", () => {
     beginSave(prepared("c"));
     markUnsaved();
     resetWorkspace("a");
-    expect(state().run.phase).toBe("unsaved");
+    expect(selectRun(state()).phase).toBe("unsaved");
   });
 });
 
@@ -271,7 +307,7 @@ describe("多尺寸生成中的槽位", () => {
   ];
   const multiPlan = { n: 1, size: sizes[0], sizes };
   const slots = () => {
-    const run = state().run;
+    const run = selectRun(state());
     if (run.phase !== "generating" || !run.slots) throw new Error("no slots");
     return run.slots;
   };
@@ -285,7 +321,7 @@ describe("多尺寸生成中的槽位", () => {
     expect(selectRunDone(state())).toBe(0);
     endRun();
     beginRun(plan);
-    expect(state().run).toMatchObject({ slots: null });
+    expect(selectRun(state())).toMatchObject({ slots: null });
     expect(selectRunTotal(state())).toBe(0);
   });
 
@@ -326,7 +362,7 @@ describe("多尺寸生成中的槽位", () => {
 
   it("不在生成中、越界的下标：忽略", () => {
     setSlotPartial(0, new Blob());
-    expect(state().run).toEqual({ phase: "idle" });
+    expect(selectRun(state())).toEqual({ phase: "idle" });
     beginRun(multiPlan);
     const before = state();
     setSlotPartial(9, new Blob());
@@ -334,6 +370,6 @@ describe("多尺寸生成中的槽位", () => {
     expect(state()).toBe(before);
     endRun();
     setSlotDone(0, new Blob());
-    expect(state().run).toEqual({ phase: "idle" });
+    expect(selectRun(state())).toEqual({ phase: "idle" });
   });
 });

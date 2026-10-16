@@ -31,6 +31,12 @@ export const patchForm = (patch: Partial<GenForm>) =>
 export const setInputFidelity = (inputFidelity: FidelityChoice) =>
   setDraft({ inputFidelity, dirty: true });
 
+/** 提交生成：请求参数已快照，立即清空描述；保留参数和输入图供下一次创作。 */
+export const markSubmitted = () =>
+  set((s) => ({
+    draft: { ...s.draft, form: { ...s.draft.form, prompt: "" }, dirty: false },
+  }));
+
 export const acceptSize = () => setDraft({ sizeAccepted: true });
 
 /** 开始读取一批上传 */

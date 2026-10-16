@@ -6,6 +6,7 @@ import { DEFAULT_FORM, type GenForm } from "../../lib/params";
 import type {
   ApiErrorKind,
   FidelityChoice,
+  GenParams,
   InpaintDraft,
   InpaintEntry,
   InpaintIssue,
@@ -28,6 +29,15 @@ import {
   type VideoInputMode,
   type VideoRecord,
 } from "../../lib/video";
+
+/** 每次提交独立运行；请求快照与结果不会被其他任务覆盖。 */
+export interface GenerationTask {
+  id: string;
+  prompt: string;
+  model: GenParams["model"];
+  run: Exclude<Run, { phase: "idle" }>;
+  submittedDraft: WorkspaceState["draft"];
+}
 
 /** 多尺寸生成中的一个请求（一个比例一格）：各自的阶段、渐进预览、终稿与失败原因 */
 export interface RunSlot {
@@ -134,7 +144,8 @@ export interface WorkspaceState {
     /** 刚保存的那次生成：列表回推前用它过渡显示；展示它期间沿用同一组图片 URL，保存前后不闪空。下次开始生成时清空 */
     recent: PreparedGeneration | null;
   };
-  run: Run;
+  /** 并行生成任务，最新提交在前；未保存结果保留到用户确认放弃。 */
+  tasks: GenerationTask[];
   /** 一次提交的草稿：文字、参数与输入图；局部重绘时底图恒为 inputs[0] */
   draft: {
     form: GenForm;
@@ -143,7 +154,7 @@ export interface WorkspaceState {
     /** 建议尺寸是否已接受：仅对当前底图与目标尺寸有效 */
     sizeAccepted: boolean;
     inputFidelity: FidelityChoice;
-    /** 自上次初始化以来用户是否改过草稿 */
+    /** 自上次初始化或提交以来用户是否改过草稿；保存成功时据此决定要不要复位草稿 */
     dirty: boolean;
     /** 正在读取的上传批次；非 null 即读取中 */
     readId: string | null;
@@ -190,7 +201,7 @@ export const initialWorkspace = (): WorkspaceState => {
   })[0];
   return {
     history: { rows: null, recent: null },
-    run: { phase: "idle" },
+    tasks: [],
     draft: {
       form: DEFAULT_FORM,
       inputs: [],

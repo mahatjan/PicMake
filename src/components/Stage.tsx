@@ -484,6 +484,11 @@ export function Stage(props: {
   /** 视口尺寸：多尺寸排版据此决定一行还是两行 */
   viewport: { w: number; h: number };
   display: DisplayGen | null;
+  /** 首页画廊正在展示：空状态引导让位给画廊，两者不叠在一起。
+   *  没有画廊时阶段名仍是 "empty"（含列表还在加载的第一帧） */
+  hideEmpty?: boolean;
+  /** 画廊盖住舞台：舞台不画生成态与结果（生成卡、新作品都在画廊网格里），只留背景与滚轮监听 */
+  hidden?: boolean;
   onFocus: (idx: number | null) => void;
   onLightbox: (id: string) => void;
   onDownload: (idx: number) => void;
@@ -511,7 +516,7 @@ export function Stage(props: {
 
   return (
     <div
-      className="pm-stage"
+      className={"pm-stage" + (props.hidden ? " is-hidden" : "")}
       data-mode={
         isGen
           ? "gen"
@@ -521,7 +526,10 @@ export function Stage(props: {
               : multi
                 ? "multi"
                 : "grid"
-            : "empty"
+            : props.hideEmpty
+              ? // 画廊盖在舞台上：这里没有可见内容
+                "home"
+              : "empty"
       }
     >
       <div
@@ -545,7 +553,9 @@ export function Stage(props: {
           onCancel={props.onCancel}
         />
       )}
-      {!isGen && !done && <StageEmpty onStart={props.onStart} />}
+      {!isGen && !done && !props.hideEmpty && (
+        <StageEmpty onStart={props.onStart} />
+      )}
       {single && done && (
         <>
           <div key={display.row.id} className="pm-stage-swap">

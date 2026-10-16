@@ -722,6 +722,16 @@
   color: var(--pm-text-3);
   margin: 0;
 }
+/* 生成中的任务摘要 */
+.pm-bar-genfoot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pm-bar-genfoot .pm-bar-gennote {
+  flex: 1;
+  min-width: 0;
+}
 .pm-bar-ok {
   display: inline-flex;
   align-items: center;

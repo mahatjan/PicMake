@@ -1,14 +1,7 @@
-/** 顶左浮岛：品牌 / 新建生成 / 主题切换 / 历史 / 视频 / 设置 */
+/** 顶左浮岛：品牌 / 首页 / 主题切换 / 历史 / 视频 / 设置 */
 import { useTranslation } from "react-i18next";
 import { Button } from "@heroui/react";
-import {
-  Clapperboard,
-  Menu,
-  Moon,
-  Settings,
-  SquarePen,
-  Sun,
-} from "lucide-react";
+import { Clapperboard, House, Menu, Moon, Settings, Sun } from "lucide-react";
 import type { ResolvedTheme } from "../lib/theme";
 
 export function TopNav(props: {
@@ -40,11 +33,11 @@ export function TopNav(props: {
         variant="ghost"
         isIconOnly
         size="sm"
-        aria-label={t("detail.newGeneration")}
+        aria-label={t("nav.home")}
         isDisabled={!props.canNew}
         onPress={props.onNew}
       >
-        <SquarePen size={15} />
+        <House size={15} />
       </Button>
       <Button
         variant="ghost"

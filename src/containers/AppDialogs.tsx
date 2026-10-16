@@ -2,12 +2,13 @@
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../components/overlays/ConfirmDialog";
 import { useWorkspace } from "../store/workspace";
+import { selectRun } from "../store/workspace/selectors";
 import { closeConfirm } from "../store/workspace/actions";
 
 export function AppDialogs() {
   const { t } = useTranslation();
   const confirm = useWorkspace((s) => s.confirm);
-  const saving = useWorkspace((s) => s.run.phase === "saving");
+  const saving = useWorkspace((s) => selectRun(s).phase === "saving");
 
   return (
     <>

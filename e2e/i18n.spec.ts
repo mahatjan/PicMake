@@ -72,7 +72,20 @@ test.describe("英文界面", () => {
     await expect(
       page.getByText("Generation complete · saved locally"),
     ).toBeVisible();
-    // 详情浮卡、底栏完成态、创作条都在页面上
+    // 生成后停在首页画廊：标题、计数、卡片元信息与生成卡都走英文资源
+    const gallery = page.locator(".pm-gal");
+    await expect(gallery).toBeVisible();
+    await expect(gallery.getByText("1 creation")).toBeVisible();
+    await expect(gallery.getByText("1 image")).toBeVisible();
+    // 底栏完成态（再来一版等）仍在
+    await expect(
+      page.getByRole("button", { name: "Regenerate" }),
+    ).toBeVisible();
+    await expectNoCjk(page);
+
+    // 点开该记录：详情浮卡与工具条也在页面上
+    await gallery.getByRole("button", { name: /a small cabin/ }).click();
+    await expect(gallery).toBeHidden();
     await expect(page.getByLabel("Details of this generation")).toBeVisible();
     await expectNoCjk(page);
 
@@ -107,6 +120,8 @@ test.describe("英文界面", () => {
     await expect(
       page.getByText("Generation complete · saved locally"),
     ).toBeVisible();
+    // 生成后停在画廊；多张结果的网格、轮播与删除确认在点开该记录之后
+    await page.locator(".pm-gal-card").first().click();
     await expect(page.getByText("2 images")).toBeVisible();
     await expectNoCjk(page);
 
@@ -175,6 +190,8 @@ test.describe("英文界面", () => {
     await expect(
       page.getByText("Generation complete · saved locally"),
     ).toBeVisible();
+    // 生成后停在画廊；点开这条重绘记录才看到它的详情浮卡
+    await page.locator(".pm-gal-card").first().click();
     await page.getByRole("button", { name: "View selection" }).click();
     const view = page.getByRole("dialog", { name: "View selection" });
     await expect(view.getByText("Base image · 256 × 256")).toBeVisible();
@@ -186,7 +203,7 @@ test.describe("英文界面", () => {
     return page.evaluate(() =>
       [
         ...document.querySelectorAll(
-          ".pm-pop, .pm-bar-row2, .pm-detail, .pm-mcell, .pm-gen-pill",
+          ".pm-pop, .pm-bar-row2, .pm-detail, .pm-mcell, .pm-gen-pill, .pm-gal",
         ),
       ]
         .filter((el) => el.scrollWidth > el.clientWidth + 1)
@@ -238,10 +255,12 @@ test.describe("英文界面", () => {
     await page.getByRole("button", { name: "Generate image" }).click();
     await expect(page.getByText("2 of 3 sizes generated")).toBeVisible();
     await expect(page.getByText("9:16: Too many requests")).toBeVisible();
-    await expect(page.getByText("2 sizes")).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Regenerate · 3 sizes" }),
     ).toBeVisible();
+    // 生成后停在画廊；点开该记录再看舞台上各比例的标注与「未生成」提示
+    await page.locator(".pm-gal-card").first().click();
+    await expect(page.getByText("2 sizes")).toBeVisible();
     await expect(page.getByText("Not generated: 9:16")).toBeVisible();
     await expect(page.locator(".pm-mcap")).toHaveText([
       "1:1 · 1024 × 1024",
@@ -271,14 +290,18 @@ test.describe("英文界面", () => {
 
     await prompt(page).fill("cancel one [500@1008x1792] [slow@1792x1008]");
     await page.getByRole("button", { name: "Generate image" }).click();
-    await expect(page.getByText("Generating · 1/3 done")).toBeVisible();
-    await expect(page.getByText("Failed", { exact: true })).toBeVisible();
+    // 进度在创作条上；失败原因在画廊的生成卡里
+    const bar = page.locator(".pm-bar");
+    const genCard = page.locator(".pm-gal-card.is-gen");
+    await expect(bar.getByText("1/3 done")).toBeVisible();
+    // 失败格在卡上显示「Failed · 错误标题」
+    await expect(genCard.getByText("Failed")).toBeVisible();
     await expect(
-      page.getByText("Service temporarily unavailable"),
+      genCard.getByText("Service temporarily unavailable"),
     ).toBeVisible();
     await expectNoCjk(page);
     expect(await overflowing(page)).toEqual([]);
-    await page.getByRole("button", { name: "Cancel generation" }).click();
+    await bar.getByRole("button", { name: "Cancel" }).click();
     // 1 张已完成：复数的 _one 形式
     await expect(
       page.getByText("Cancelled. 1 finished image saved"),

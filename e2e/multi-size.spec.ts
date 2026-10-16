@@ -14,6 +14,14 @@ const sizeChip = (page: Page) =>
 const countChip = (page: Page) =>
   page.getByRole("button", { name: "生成张数" });
 
+/** 生成完成后默认停在首页画廊；需要看舞台上的结果就点开最上面那条 */
+async function openNewest(page: Page) {
+  const gallery = page.locator(".pm-gal");
+  await expect(gallery).toBeVisible();
+  await gallery.locator(".pm-gal-card").first().click();
+  await expect(gallery).toBeHidden();
+}
+
 const PRESETS = ["1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16"];
 
 async function configure(page: Page) {
@@ -80,6 +88,13 @@ test("选 3 个比例生成：一条记录三张图，按比例顺序排列并�
   await prompt(page).fill("三种比例 [json]");
   await generate(page).click();
   await expect(done(page)).toBeVisible();
+  // 停在画廊时完成态仍可用：再来一版按钮标出份数，避免意外计费
+  await expect(
+    page.getByRole("button", { name: "再来一版 · 3 个尺寸" }),
+  ).toBeVisible();
+
+  // 舞台上的排版与详情浮卡在点开该记录之后
+  await openNewest(page);
 
   // 与点选先后无关：按 1:1、16:9、9:16 的 chip 顺序，每张下方标注比例与像素
   await expect(page.locator(".pm-mcap")).toHaveText([
@@ -88,10 +103,6 @@ test("选 3 个比例生成：一条记录三张图，按比例顺序排列并�
     "9:16 · 1008 × 1792",
   ]);
   await expect(page.getByText("共 3 个尺寸")).toBeVisible();
-  // 再来一版按钮标出份数，避免意外计费
-  await expect(
-    page.getByRole("button", { name: "再来一版 · 3 个尺寸" }),
-  ).toBeVisible();
   // 详情浮卡：尺寸列出每张图的实际像素，没有张数
   const detail = page.getByLabel("本次生成详情");
   await expect(detail.getByText("1792 × 1008")).toBeVisible();
@@ -111,6 +122,7 @@ test("点图弹轮播：显示当前图的尺寸，循环切换后关闭", async
   await prompt(page).fill("轮播 [json]");
   await generate(page).click();
   await expect(done(page)).toBeVisible();
+  await openNewest(page);
 
   await page.getByRole("button", { name: "结果 2" }).click();
   const carousel = page.getByRole("dialog", { name: "查看图片" });
@@ -135,6 +147,7 @@ test("部分失败：成功的入库并展示，toast 列出失败的比例与�
 
   await expect(page.getByText("已生成 2/3 个尺寸")).toBeVisible();
   await expect(page.getByText("16:9：请求过于频繁")).toBeVisible();
+  await openNewest(page);
   // 失败的格子移除，舞台只展示入库的图
   await expect(page.locator(".pm-mcap")).toHaveText([
     "1:1 · 1024 × 1024",
@@ -147,7 +160,7 @@ test("部分失败：成功的入库并展示，toast 列出失败的比例与�
   ).toBeVisible();
 });
 
-test("全部失败：只弹一条错误提示，不入库，草稿保留", async ({ page }) => {
+test("全部失败：只弹一条错误提示，不入库，保留参数草稿", async ({ page }) => {
   await configure(page);
   await selectRatios(page, ["1:1", "16:9", "9:16"]);
   await closePopover(page);
@@ -155,7 +168,7 @@ test("全部失败：只弹一条错误提示，不入库，草稿保留", async
   await generate(page).click();
 
   await expect(page.getByText(/API Key 无效/)).toHaveCount(1);
-  await expect(prompt(page)).toHaveValue("全部失败 [401]");
+  await expect(prompt(page)).toHaveValue("");
   await expect(sizeChip(page)).toContainText("3 个比例");
   await page.getByRole("button", { name: "历史" }).click();
   await expect(
@@ -172,14 +185,15 @@ test("生成中每格各自进度，失败的格子显示失败标记，其余�
   await prompt(page).fill("失败标记 [500@1008x1792] [slow@1792x1008]");
   await generate(page).click();
 
-  await expect(page.getByText("正在生成 · 已完成 0/3")).toBeVisible();
-  // 9:16 失败、1:1 完成，16:9（放慢）还在生成
-  await expect(page.getByText("生成失败")).toBeVisible();
-  await expect(page.getByText("服务端暂时不可用")).toBeVisible();
-  await expect(page.getByText("正在生成 · 已完成 1/3")).toBeVisible();
-  await expect(page.locator(".pm-mtile.done")).toHaveCount(1);
-  await expect(page.locator(".pm-mtile.running")).toHaveCount(1);
-  await page.getByRole("button", { name: "取消生成" }).click();
+  // 进度由创作条承担（生成卡上只标"新作品生成中"，避免同一句话出现两次）
+  const bar = page.locator(".pm-bar");
+  await expect(bar.getByText("已完成 0/3")).toBeVisible();
+  // 9:16 失败、1:1 完成，16:9（放慢）还在生成：生成卡上能看到失败原因
+  const genCard = page.locator(".pm-gal-card.is-gen");
+  await expect(genCard.getByText("生成失败")).toBeVisible();
+  await expect(genCard.getByText("服务端暂时不可用")).toBeVisible();
+  await expect(bar.getByText("已完成 1/3")).toBeVisible();
+  await bar.getByRole("button", { name: "取消" }).click();
 });
 
 test("生成中取消：未完成的中止，已完成的照常保存", async ({ page }) => {
@@ -190,10 +204,11 @@ test("生成中取消：未完成的中止，已完成的照常保存", async ({
   await generate(page).click();
 
   // 1:1 与 9:16 先完成，16:9 被放慢
-  await expect(page.getByText("正在生成 · 已完成 2/3")).toBeVisible();
-  await page.getByRole("button", { name: "取消生成" }).click();
+  await expect(page.locator(".pm-bar").getByText("已完成 2/3")).toBeVisible();
+  await page.locator(".pm-bar").getByRole("button", { name: "取消" }).click();
 
   await expect(page.getByText("已取消，已完成的 2 张已保存")).toBeVisible();
+  await openNewest(page);
   await expect(page.locator(".pm-mcap")).toHaveText([
     "1:1 · 1024 × 1024",
     "9:16 · 1008 × 1792",
@@ -204,16 +219,19 @@ test("生成中取消：未完成的中止，已完成的照常保存", async ({
   ).toBeVisible();
 });
 
-test("生成中取消且一张都没完成：同单尺寸取消，草稿保留", async ({ page }) => {
+test("生成中取消且一张都没完成：同单尺寸取消，参数草稿保留", async ({
+  page,
+}) => {
   await configure(page);
   await selectRatios(page, ["1:1", "16:9"]);
   await closePopover(page);
   await prompt(page).fill("全部放慢 [slow]");
   await generate(page).click();
-  await page.getByRole("button", { name: "取消生成" }).click();
+  await expect(prompt(page)).toHaveValue("");
+  await page.locator(".pm-bar").getByRole("button", { name: "取消" }).click();
 
   await expect(page.getByText("已取消生成")).toBeVisible();
-  await expect(prompt(page)).toHaveValue("全部放慢 [slow]");
+  await expect(prompt(page)).toHaveValue("");
   await expect(page.getByText("生成完成 · 已保存本地")).toBeHidden();
 });
 
@@ -267,13 +285,9 @@ test("再来一版按全部比例重发，微调描述还原多比例设置", as
   await closePopover(page);
   await prompt(page).fill("复用 [json]");
   await generate(page).click();
-  await expect(page.locator(".pm-mcap")).toHaveText([
-    "4:3 · 2720 × 2048",
-    "2:3 · 2048 × 3072",
-    "16:9 · 3584 × 2016",
-  ]);
+  await expect(done(page)).toBeVisible();
 
-  // 微调描述：回填多比例开关、所选比例与基准
+  // 微调描述（完成态就在画廊上）：回填多比例开关、所选比例与基准
   await page.getByRole("button", { name: "微调描述" }).click();
   await expect(sizeChip(page)).toContainText("3 个比例 · 2K");
   await sizeChip(page).click();
@@ -286,6 +300,14 @@ test("再来一版按全部比例重发，微调描述还原多比例设置", as
       restored.getByRole("button", { name: id, exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
   await closePopover(page);
+
+  // 点开该记录：各比例的实际像素按 4:3、2:3、16:9 排列
+  await openNewest(page);
+  await expect(page.locator(".pm-mcap")).toHaveText([
+    "4:3 · 2720 × 2048",
+    "2:3 · 2048 × 3072",
+    "16:9 · 3584 × 2016",
+  ]);
 });
 
 test("再来一版：同样的 3 个比例再发一次，历史新增一条", async ({ page }) => {
@@ -313,6 +335,7 @@ test("4 个横向比例折成两行，格子不超出舞台、不压到详情浮
   await prompt(page).fill("折行 [json]");
   await generate(page).click();
   await expect(done(page)).toBeVisible();
+  await openNewest(page);
 
   const tiles = page.locator(".pm-gtile");
   await expect(tiles).toHaveCount(4);
@@ -343,7 +366,9 @@ test("生成中关闭或刷新页面会弹出浏览器的离开确认", async ({
   await configure(page);
   await prompt(page).fill("离开确认 [slow]");
   await generate(page).click();
-  await expect(page.getByRole("button", { name: "取消生成" })).toBeVisible();
+  await expect(
+    page.locator(".pm-bar").getByRole("button", { name: "取消" }),
+  ).toBeVisible();
 
   const dialogEvent = page.waitForEvent("dialog");
   await page.close({ runBeforeUnload: true });
@@ -385,6 +410,7 @@ test("带参考图也能多比例：添加输入图后保持多比例，每个�
     .fill("参考图适配 [json]");
   await page.getByRole("button", { name: "生成编辑结果" }).click();
   await expect(done(page)).toBeVisible();
+  await openNewest(page);
   await expect(page.locator(".pm-mcap")).toHaveText([
     "1:1 · 1024 × 1024",
     "16:9 · 1792 × 1008",

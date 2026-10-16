@@ -25,7 +25,7 @@ import {
   patchForm,
   rowsLoaded,
 } from "../store/workspace/actions";
-import { selectRunDone } from "../store/workspace/selectors";
+import { selectRun, selectRunDone } from "../store/workspace/selectors";
 import { cancelGenerate, generate, regenerate } from "./generate";
 
 const state = () => useWorkspace.getState();
@@ -61,19 +61,48 @@ describe("generate", () => {
     expect(vi.mocked(requestImages).mock.calls[0][0]).toMatchObject({
       prompt: "猫",
     });
-    expect(state().run.phase).toBe("generating");
+    expect(selectRun(state()).phase).toBe("generating");
     expect(state().confirm).toBeNull();
+    expect(state().draft.form.prompt).toBe("");
+    expect(state().tasks[0].prompt).toBe("猫");
   });
 
-  it("生成中、保存中：忽略，不弹确认也不发请求", () => {
+  it("提交后描述已清空，连续触发不会重复提交同一条内容", () => {
     patchForm({ prompt: "猫" });
-    beginRun(plan);
     generate();
-    beginSave(prepared);
+    generate();
+    expect(requestImages).toHaveBeenCalledTimes(1);
+    expect(state().tasks).toHaveLength(1);
+    expect(state().draft.form.prompt).toBe("");
+  });
+
+  it("参数校验失败时保留描述，不创建任务", () => {
+    patchForm({ prompt: "保留的描述", cw: "1", ch: "1" });
     generate();
     expect(requestImages).not.toHaveBeenCalled();
-    expect(state().confirm).toBeNull();
-    expect(state().run.phase).toBe("saving");
+    expect(state().tasks).toHaveLength(0);
+    expect(state().draft.form.prompt).toBe("保留的描述");
+  });
+
+  it("starts immediately while another task is generating or saving", () => {
+    patchForm({ prompt: "cat" });
+    generate();
+    const first = state().tasks[0].id;
+    beginSave(prepared, first);
+    patchForm({ prompt: "dog" });
+    generate();
+    expect(requestImages).toHaveBeenCalledTimes(2);
+    expect(state().tasks).toHaveLength(2);
+    expect(state().tasks.find((task) => task.id === first)?.run.phase).toBe(
+      "saving",
+    );
+  });
+
+  it("rejects invalid drafts during generation", () => {
+    beginRun(plan);
+    generate();
+    expect(requestImages).not.toHaveBeenCalled();
+    expect(state().tasks).toHaveLength(1);
   });
 
   it("有未保存结果：先弹确认，不发请求；取消后结果仍在", () => {
@@ -83,7 +112,8 @@ describe("generate", () => {
     expect(state().confirm).toMatchObject({ title: "放弃未保存结果？" });
     expect(requestImages).not.toHaveBeenCalled();
     closeConfirm();
-    expect(state().run).toEqual({ phase: "unsaved", prepared });
+    expect(selectRun(state())).toEqual({ phase: "unsaved", prepared });
+    expect(state().draft.form.prompt).toBe("猫");
     expect(requestImages).not.toHaveBeenCalled();
   });
 
@@ -100,7 +130,18 @@ describe("generate", () => {
     expect(vi.mocked(requestImages).mock.calls[0][0]).toMatchObject({
       prompt: "猫",
     });
-    expect(state().run.phase).toBe("generating");
+    expect(selectRun(state()).phase).toBe("generating");
+    expect(state().draft.form.prompt).toBe("狗");
+  });
+
+  it("确认放弃未保存结果后，清空本次提交的描述", () => {
+    patchForm({ prompt: "猫" });
+    toUnsaved();
+    generate();
+    state().confirm!.onOk();
+    expect(requestImages).toHaveBeenCalledTimes(1);
+    expect(state().draft.form.prompt).toBe("");
+    expect(state().tasks[0].prompt).toBe("猫");
   });
 
   it("确认期间未保存结果已被处理：确认后不重复发起", () => {
@@ -113,7 +154,7 @@ describe("generate", () => {
     beginRun(plan);
     onOk();
     expect(requestImages).not.toHaveBeenCalled();
-    expect(state().run.phase).toBe("generating");
+    expect(selectRun(state()).phase).toBe("generating");
   });
 
   it("草稿不合法：照常提示并聚焦描述框，不弹确认", () => {
@@ -123,7 +164,7 @@ describe("generate", () => {
     expect(toast).toHaveBeenCalledTimes(1);
     expect(state().view.focusSeq).toBe(1);
     expect(requestImages).not.toHaveBeenCalled();
-    expect(state().run.phase).toBe("unsaved");
+    expect(selectRun(state()).phase).toBe("unsaved");
   });
 });
 
@@ -205,7 +246,7 @@ describe("多尺寸生成", () => {
       [1, WIDE, undefined],
       [1, TALL, undefined],
     ]);
-    const run = state().run;
+    const run = selectRun(state());
     expect(run).toMatchObject({ phase: "generating" });
     if (run.phase === "generating")
       expect(run.slots?.map((slot) => slot.size)).toEqual([SQUARE, WIDE, TALL]);
@@ -216,7 +257,7 @@ describe("多尺寸生成", () => {
     generate();
     const handlers = vi.mocked(requestImages).mock.calls.map((c) => c[2]);
     handlers[1]?.onPartial?.(pngB64(1, 1), 0);
-    const run = state().run;
+    const run = selectRun(state());
     if (run.phase !== "generating" || !run.slots)
       throw new Error("not running");
     expect(run.slots.map((slot) => !!slot.partial)).toEqual([
@@ -248,8 +289,10 @@ describe("多尺寸生成", () => {
       { total_tokens: 1792 },
       { total_tokens: 1008 },
     ]);
-    expect(state().nav.selectedId).toBe(saved.row.id);
-    expect(state().run.phase).toBe("idle");
+    // 保存成功后留在首页画廊：不选中记录，画廊显示它
+    expect(state().nav.selectedId).toBeNull();
+    expect(state().nav.lastDoneId).toBe(saved.row.id);
+    expect(selectRun(state()).phase).toBe("idle");
     expect(toast).toHaveBeenCalledWith("生成完成");
   });
 
@@ -314,12 +357,12 @@ describe("多尺寸生成", () => {
       .mockRejectedValue(new ApiError("server", "", 500));
     multiDraft();
     generate();
-    await vi.waitFor(() => expect(state().run.phase).toBe("idle"));
+    await vi.waitFor(() => expect(selectRun(state()).phase).toBe("idle"));
 
     expect(saveGeneration).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledTimes(1);
     expect(toast).toHaveBeenCalledWith(errorMessage(first, t));
-    expect(state().draft.form).toMatchObject({ prompt: "猫", multi: true });
+    expect(state().draft.form).toMatchObject({ prompt: "", multi: true });
     expect(state().nav.lastDoneId).toBeNull();
   });
 
@@ -352,11 +395,11 @@ describe("多尺寸生成", () => {
     multiDraft();
     generate();
     cancelGenerate();
-    await vi.waitFor(() => expect(state().run.phase).toBe("idle"));
+    await vi.waitFor(() => expect(selectRun(state()).phase).toBe("idle"));
 
     expect(saveGeneration).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith("已取消生成");
-    expect(state().draft.form.prompt).toBe("猫");
+    expect(state().draft.form.prompt).toBe("");
   });
 
   it("保存失败：整条记录按未保存结果处理", async () => {
@@ -364,8 +407,8 @@ describe("多尺寸生成", () => {
     vi.mocked(saveGeneration).mockRejectedValue(new Error("quota"));
     multiDraft();
     generate();
-    await vi.waitFor(() => expect(state().run.phase).toBe("unsaved"));
-    const run = state().run;
+    await vi.waitFor(() => expect(selectRun(state()).phase).toBe("unsaved"));
+    const run = selectRun(state());
     if (run.phase === "unsaved") expect(run.prepared.images).toHaveLength(3);
     expect(state().nav.lastDoneId).toBeNull();
   });
@@ -427,6 +470,127 @@ describe("多尺寸生成", () => {
     expect(requestImages).toHaveBeenCalledTimes(3);
     expect(vi.mocked(saveGeneration).mock.calls[0][0].row.id).not.toBe("old");
     expect(row.imageIds).toEqual(["i0"]);
+  });
+});
+
+describe("parallel generation", () => {
+  function pendingRequests() {
+    const pending: Array<{
+      params: GenParams;
+      signal?: AbortSignal;
+      resolve: () => void;
+      reject: (error: unknown) => void;
+    }> = [];
+    vi.mocked(requestImages).mockImplementation(
+      (params, _config, handlers) =>
+        new Promise((resolve, reject) => {
+          handlers?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError")),
+          );
+          pending.push({
+            params,
+            signal: handlers?.signal,
+            resolve: () => resolve(ok(params)),
+            reject,
+          });
+        }),
+    );
+    return pending;
+  }
+
+  it("starts every submission immediately and saves out of order without losing the draft", async () => {
+    const pending = pendingRequests();
+    patchForm({ prompt: "first" });
+    generate();
+    const firstId = state().tasks[0].id;
+    patchForm({ prompt: "second" });
+    generate();
+    patchForm({ prompt: "unfinished draft" });
+    expect(pending.map((one) => one.params.prompt)).toEqual([
+      "first",
+      "second",
+    ]);
+    expect(pending[0].signal).not.toBe(pending[1].signal);
+    pending[1].resolve();
+    await vi.waitFor(() => expect(saveGeneration).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(state().tasks).toHaveLength(1));
+    expect(state().tasks[0].id).toBe(firstId);
+    expect(state().draft.form.prompt).toBe("unfinished draft");
+    pending[0].resolve();
+    await vi.waitFor(() => expect(state().tasks).toHaveLength(0));
+    expect(
+      vi.mocked(saveGeneration).mock.calls.map(([pack]) => pack.row.prompt),
+    ).toEqual(["second", "first"]);
+    expect(state().draft.form.prompt).toBe("unfinished draft");
+  });
+
+  it("isolates previews and ignores callbacks from a cancelled task", async () => {
+    const pending = pendingRequests();
+    patchForm({ prompt: "first" });
+    generate();
+    const firstId = state().tasks[0].id;
+    patchForm({ prompt: "second" });
+    generate();
+    const handlers = vi.mocked(requestImages).mock.calls.map((call) => call[2]);
+    handlers[0]?.onPartial?.(pngB64(1, 1), 0);
+    expect(state().tasks[0].run).toMatchObject({ partial: null });
+    expect(state().tasks[1].run).toMatchObject({ partial: { index: 0 } });
+    cancelGenerate(firstId);
+    await vi.waitFor(() => expect(state().tasks).toHaveLength(1));
+    handlers[0]?.onPartial?.(pngB64(2, 2), 1);
+    expect(state().tasks[0].run).toMatchObject({ partial: null });
+    expect(pending[1].signal?.aborted).toBe(false);
+    pending[1].resolve();
+    await vi.waitFor(() => expect(state().tasks).toHaveLength(0));
+    expect(saveGeneration).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failed request does not end another task", async () => {
+    const pending = pendingRequests();
+    patchForm({ prompt: "first" });
+    generate();
+    patchForm({ prompt: "second" });
+    generate();
+    pending[0].reject(new ApiError("server", "", 500));
+    await vi.waitFor(() => expect(state().tasks).toHaveLength(1));
+    expect(state().tasks[0].prompt).toBe("second");
+    pending[1].resolve();
+    await vi.waitFor(() => expect(state().tasks).toHaveLength(0));
+    expect(saveGeneration).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps every unsaved result while other tasks finish successfully", async () => {
+    const pending = pendingRequests();
+    vi.mocked(saveGeneration).mockImplementation(async (pack) => {
+      if (pack.row.prompt !== "third") throw new Error("quota");
+    });
+    for (const prompt of ["first", "second", "third"]) {
+      patchForm({ prompt });
+      generate();
+    }
+    pending.forEach((one) => one.resolve());
+    await vi.waitFor(() => expect(state().tasks).toHaveLength(2));
+    expect(state().tasks.map((task) => task.run.phase)).toEqual([
+      "unsaved",
+      "unsaved",
+    ]);
+    const [second, first] = state().tasks;
+    discardUnsaved(second.id);
+    expect(state().tasks.map((task) => task.id)).toEqual([first.id]);
+    expect(selectRun(state()).phase).toBe("unsaved");
+  });
+
+  it("cancels all active tasks together without saving unfinished results", async () => {
+    const pending = pendingRequests();
+    for (const prompt of ["first", "second", "third", "fourth", "fifth"]) {
+      patchForm({ prompt });
+      generate();
+    }
+    expect(pending).toHaveLength(5);
+    cancelGenerate();
+    await vi.waitFor(() => expect(state().tasks).toHaveLength(0));
+    expect(pending.every((one) => one.signal?.aborted)).toBe(true);
+    expect(saveGeneration).not.toHaveBeenCalled();
   });
 });
 

@@ -44,6 +44,8 @@
   --pm-shadow-card: 0 18px 40px rgba(23, 23, 26, 0.14);
   --pm-scrollbar: rgba(23, 23, 26, 0.18);
   --pm-vignette: rgba(247, 248, 249, 0.8);
+  /* 首页画廊的列宽：窄屏在 stage.css 的媒体查询里覆盖 */
+  --pm-gal-grid: repeat(auto-fill, minmax(232px, 1fr));
   --pm-stage-gen:
     radial-gradient(
       120% 90% at 50% 38%,

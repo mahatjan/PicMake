@@ -96,6 +96,9 @@ for (const locale of ["zh-CN", "en-US"]) {
       await page
         .getByRole("button", { name: labels.generate, exact: true })
         .click();
+      await expect(
+        page.getByRole("textbox", { name: labels.prompt, exact: true }),
+      ).toHaveValue("");
       await expect(page.getByText(labels.done, { exact: true })).toBeVisible();
       expect(bodies).toHaveLength(1);
       const fields = JSON.parse(bodies[0].body);
@@ -158,7 +161,7 @@ test("关闭流式后多比例的每个请求都省略流式参数", async ({ pa
   }
 });
 
-test("非流式错误保留草稿且不自动重发", async ({ page }) => {
+test("非流式错误清空已提交描述且不自动重发", async ({ page }) => {
   const bodies = imageRequests(page);
   await configureWithoutStreaming(page);
   await page
@@ -168,7 +171,7 @@ test("非流式错误保留草稿且不自动重发", async ({ page }) => {
   await expect(page.getByText(/API Key 无效/)).toBeVisible();
   await expect(
     page.getByRole("textbox", { name: "画面描述", exact: true }),
-  ).toHaveValue("provider error [401]");
+  ).toHaveValue("");
   expect(bodies).toHaveLength(1);
   await expect(
     page.getByText("生成完成 · 已保存本地", { exact: true }),
@@ -228,7 +231,7 @@ for (const inpaint of [false, true]) {
   });
 }
 
-test("非流式等待期间仍可取消，取消后保留草稿", async ({ page }) => {
+test("非流式等待期间仍可取消，描述保持已清空", async ({ page }) => {
   await configureWithoutStreaming(page);
   let finishRequest!: () => void;
   const pending = new Promise<void>((resolve) => {
@@ -243,14 +246,17 @@ test("非流式等待期间仍可取消，取消后保留草稿", async ({ page 
       .getByRole("textbox", { name: "画面描述", exact: true })
       .fill("waiting for a full image");
     await page.getByRole("button", { name: "生成图片", exact: true }).click();
+    await expect(
+      page.getByRole("textbox", { name: "画面描述", exact: true }),
+    ).toHaveValue("");
     await expect(page.locator(".pm-bar-genst")).toHaveText("正在生成");
     await expect(page.locator(".pm-bar-gennote")).toHaveText(
       "完成后自动保存到本地",
     );
-    await page.getByRole("button", { name: "取消生成", exact: true }).click();
+    await page.locator(".pm-bar").getByRole("button", { name: "取消" }).click();
     await expect(
       page.getByRole("textbox", { name: "画面描述", exact: true }),
-    ).toHaveValue("waiting for a full image");
+    ).toHaveValue("");
     await expect(
       page.getByText("生成完成 · 已保存本地", { exact: true }),
     ).toBeHidden();

@@ -27,9 +27,11 @@ import {
   setBarMode,
   setConfirm,
   setReturnId,
+  viewRecord,
 } from "../store/workspace/actions";
 import {
   findRow,
+  selectRun,
   selectDisplayRow,
   selectRows,
   selectSelectedImageId,
@@ -38,13 +40,15 @@ import { readInpaintDraft, toastError } from "./generate";
 
 /** 延迟回调（确认之后、await 之后）按当前状态复核：已开始生成或正在保存时不再执行 */
 function busyNow(): boolean {
-  const { phase } = useWorkspace.getState().run;
+  const { phase } = selectRun(useWorkspace.getState());
   return phase === "generating" || phase === "saving";
 }
 
 /** 离开或替换当前结果/草稿：规则见 leaveDecision；usesDisplayed = 以展示中的记录为来源 */
 export function requestLeave(onLeave: () => void, usesDisplayed = false) {
-  const { run, draft } = useWorkspace.getState();
+  const state = useWorkspace.getState();
+  const run = selectRun(state);
+  const { draft } = state;
   const decision = leaveDecision({
     run: run.phase,
     userWork: hasUserWork({
@@ -80,10 +84,15 @@ export function requestLeave(onLeave: () => void, usesDisplayed = false) {
 }
 
 export function selectHistory(id: string) {
-  requestLeave(() => resetWorkspace(id));
+  if (findRow(useWorkspace.getState(), id)) viewRecord(id);
 }
 
 export function newGeneration() {
+  // 后台任务有自己的草稿快照，回首页只切换查看目标。
+  if (useWorkspace.getState().tasks.length) {
+    viewRecord(null);
+    return;
+  }
   requestLeave(() => resetWorkspace(null));
 }
 
@@ -191,7 +200,7 @@ export function adjustInpaint(id: string) {
 export function deleteRecord(id: string) {
   const state = useWorkspace.getState();
   const row = findRow(state, id);
-  if (state.run.phase !== "idle" || !row) return;
+  if (selectRun(state).phase !== "idle" || !row) return;
   // 请求时确定是否删的是当前记录：liveQuery 可能先于删除完成回推并回退选中
   const wasCurrent = state.nav.selectedId === id;
   setConfirm({
@@ -220,7 +229,7 @@ export function toggleStar(id: string) {
 export function addAsReference() {
   const state = useWorkspace.getState();
   const row = selectDisplayRow(state);
-  if (state.run.phase !== "idle" || !row) return;
+  if (selectRun(state).phase !== "idle" || !row) return;
   const imageId = selectSelectedImageId(state) ?? row.imageIds[0] ?? null;
   if (!imageId) return;
   const added = appendExisting(imageId, row.id);

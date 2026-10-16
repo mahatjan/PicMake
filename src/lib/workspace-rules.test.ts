@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_FORM, type GenForm } from "./params";
-import type { InpaintDraft, SketchCommand } from "./types";
+import { type InpaintDraft, type SketchCommand } from "./types";
 import {
   canOpenDrawing,
   canOpenPlayground,
@@ -12,6 +12,7 @@ import {
   leaveDecision,
   nextSelection,
   shouldCollapseBar,
+  submitDecision,
   wheelTarget,
   type RunPhase,
 } from "./workspace-rules";
@@ -70,12 +71,26 @@ describe("canOpenDrawing", () => {
     expect(canOpenDrawing(free)).toBe(true);
   });
 
-  it("任一阻断条件成立都不能打开", () => {
-    for (const run of ["generating", "saving", "unsaved"] as const)
+  it("生成中也可以打开：请求按提交时的快照发出，之后改草稿不影响它", () => {
+    expect(canOpenDrawing({ ...free, run: "generating" })).toBe(true);
+  });
+
+  it("结果还在内存里（保存中、未保存）或读取中、有弹层时都不能打开", () => {
+    for (const run of ["saving", "unsaved"] as const)
       expect(canOpenDrawing({ ...free, run })).toBe(false);
     expect(canOpenDrawing({ ...free, reading: true })).toBe(false);
     expect(canOpenDrawing({ ...free, confirming: true })).toBe(false);
     expect(canOpenDrawing({ ...free, drawing: true })).toBe(false);
+  });
+});
+
+describe("submitDecision", () => {
+  it("starts independent tasks while generating or saving", () => {
+    for (const run of ["idle", "generating", "saving"] as const)
+      expect(submitDecision({ run })).toBe("run");
+  });
+  it("confirms before discarding an unsaved result", () => {
+    expect(submitDecision({ run: "unsaved" })).toBe("confirm-unsaved");
   });
 });
 
@@ -127,6 +142,7 @@ describe("canWheelSwitch", () => {
     overlayOpen: false,
     drawing: false,
     confirming: false,
+    atHome: false,
   } as const;
 
   it("没有草稿、弹层和画板时可以切换", () => {
@@ -141,6 +157,10 @@ describe("canWheelSwitch", () => {
     expect(canWheelSwitch({ ...free, overlayOpen: true })).toBe(false);
     expect(canWheelSwitch({ ...free, drawing: true })).toBe(false);
     expect(canWheelSwitch({ ...free, confirming: true })).toBe(false);
+  });
+
+  it("在首页画廊时不切换：滚轮留给画廊滚动", () => {
+    expect(canWheelSwitch({ ...free, atHome: true })).toBe(false);
   });
 });
 

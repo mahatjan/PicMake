@@ -7,7 +7,7 @@ import { saveSettings, testConnection } from "../flows/settings";
 import { newGeneration, selectHistory, toggleStar } from "../flows/navigation";
 import { useTheme } from "../hooks/useTheme";
 import type { WorkspaceAssets } from "../hooks/useWorkspaceAssets";
-import { canOpenPlayground, leaveDecision } from "../lib/workspace-rules";
+import { canOpenPlayground } from "../lib/workspace-rules";
 import { useSettings } from "../store/settings";
 import { useWorkspace } from "../store/workspace";
 import {
@@ -32,14 +32,6 @@ export function ChromeArea({ assets }: { assets: WorkspaceAssets }) {
   const settingsOpen = useWorkspace((s) => s.view.settingsOpen);
   const playgroundOpen = useWorkspace((s) => s.view.playgroundOpen);
   const drawing = useWorkspace((s) => s.drawing !== null);
-  const canNew = useWorkspace(
-    (s) =>
-      leaveDecision({
-        run: s.run.phase,
-        userWork: false,
-        usesDisplayed: false,
-      }) !== "blocked",
-  );
 
   const [usageBytes, setUsageBytes] = useState<number | null>(null);
   useEffect(() => {
@@ -55,7 +47,7 @@ export function ChromeArea({ assets }: { assets: WorkspaceAssets }) {
         theme={theme.resolved}
         onToggleTheme={theme.toggle}
         onNew={newGeneration}
-        canNew={canNew}
+        canNew
         onHistory={openDrawer}
         onSettings={openSettings}
         videoOpen={playgroundOpen}

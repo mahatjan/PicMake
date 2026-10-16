@@ -1,4 +1,5 @@
-/** 底部创作条：mini / full / generating / complete 四态，纯展示；弹层开合为内部状态 */
+/** 底部创作条：mini / full / generating / complete 四态，纯展示；弹层开合为内部状态。
+ *  generating 态是"进度 + 输入"，草稿可继续提交独立任务 */
 import { useEffect, useRef, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowUp, Paperclip, Pencil, Plus, RotateCcw } from "lucide-react";
@@ -9,7 +10,7 @@ import type {
   DisplayInput,
   InpaintBarInfo,
 } from "../../lib/view-models";
-import type { FidelityChoice, UploadIssue } from "../../lib/types";
+import type { FidelityChoice, ModelId, UploadIssue } from "../../lib/types";
 import { MAX_INPUT_IMAGES } from "../../lib/types";
 import { BarChip } from "./BarChip";
 
@@ -66,6 +67,7 @@ function FullBar(props: FullBarProps) {
   const inpaint = props.inpaint;
   const sizeBlocked = !!inpaint?.suggested && !inpaint.accepted;
   const ready = !props.reading && !sizeBlocked && f.prompt.trim().length > 0;
+  const blockTitle = sizeBlocked ? t("bar.sizeBlocked") : undefined;
   // 窄屏输入框随内容增高，离开 full 态即卸下监听并清掉行内高度
   useEffect(() => {
     const el = props.promptRef.current;
@@ -173,7 +175,7 @@ function FullBar(props: FullBarProps) {
                   ? t("bar.sendEdit")
                   : t("bar.send")
           }
-          title={sizeBlocked ? t("bar.sizeBlocked") : undefined}
+          title={blockTitle}
           disabled={!ready}
           onClick={props.onGenerate}
         >
@@ -254,11 +256,14 @@ function FullBar(props: FullBarProps) {
   );
 }
 
-/** 底栏总装：状态优先级 generating > complete > (full > mini)；FullBar 子集整体透传 */
+/** 底栏总装：状态优先级 generating > complete > (full > mini)。生成中在进度行下面照常给出输入，
+ *  子节点按固定次序占位，生成开始与结束都不重新挂载 FullBar（否则正在输入的描述会失焦） */
 export function CreateBar(
   props: FullBarProps & {
     mode: "mini" | "full";
     generating: boolean;
+    generatingModel: ModelId;
+    activeCount: number;
     done: DisplayGen | null;
     partialIndex: number | null;
     /** 多尺寸生成中已完成的请求数与总数；单尺寸为 null */
@@ -276,9 +281,11 @@ export function CreateBar(
   const {
     mode,
     generating,
+    generatingModel,
     done,
     partialIndex,
     progress,
+    activeCount,
     onCancel,
     onExpand,
     onAgain,
@@ -297,17 +304,18 @@ export function CreateBar(
       aria-label={t("bar.label")}
       data-state={state}
     >
-      {state === "mini" && (
-        <MiniBar form={full.form} disabled={full.reading} onExpand={onExpand} />
-      )}
-      {state === "full" && <FullBar {...full} />}
-      {state === "generating" && (
+      {generating && (
         <GenBar
-          model={full.form.model}
+          model={generatingModel}
           partialIndex={partialIndex}
           progress={progress}
+          activeCount={activeCount}
           onCancel={onCancel}
         />
+      )}
+      {(generating || mode === "full") && <FullBar {...full} />}
+      {state === "mini" && (
+        <MiniBar form={full.form} disabled={full.reading} onExpand={onExpand} />
       )}
       {state === "complete" && done && (
         <DoneBar

@@ -107,14 +107,19 @@
   flex-direction: column;
   gap: 12px;
   max-width: 92vw;
+  min-width: 0;
+  width: min(76vw, 1100px);
 }
 .pm-lb-im {
-  /* 3:2 图在矮视口下会把底栏挤出屏幕（关不掉的根源），用 108vh 封顶宽度 */
-  width: min(76vw, 1100px, 108vh);
-  aspect-ratio: 3/2;
+  display: block;
+  align-self: center;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: calc(100vh - 180px);
+  max-height: calc(100dvh - 180px);
+  object-fit: contain;
   border-radius: 12px;
-  background-size: cover;
-  background-position: center;
   cursor: zoom-out;
   box-shadow:
     var(--pm-shadow-lb),
@@ -153,14 +158,14 @@
       calc(16px + env(safe-area-inset-left, 0px));
   }
   .pm-lb-wrap {
-    width: min(calc(100vw - 32px), calc((100vh - 220px) * 3 / 2));
-    width: min(calc(100vw - 32px), calc((100dvh - 220px) * 3 / 2));
+    width: calc(100vw - 32px);
     max-width: 100%;
     margin: auto;
     min-width: 0;
   }
   .pm-lb-im {
-    width: 100%;
+    max-height: calc(100vh - 240px);
+    max-height: calc(100dvh - 240px);
   }
   .pm-lb-bar {
     flex-direction: column;

@@ -25,6 +25,7 @@ export const en = {
 
   nav: {
     label: "Main navigation",
+    home: "Home",
     toLight: "Switch to light mode",
     toDark: "Switch to dark mode",
     history: "History",
@@ -99,6 +100,16 @@ export const en = {
     noMatchTitle: "No matching history",
     noMatchHint: "Try a different search or filter",
     footer: "All data stays in this browser",
+  },
+
+  gallery: {
+    label: "Creation gallery",
+    title: "History",
+    count_one: "{{count}} creation",
+    count_other: "{{count}} creations",
+    generatingCard: "Creating a new image",
+    saving: "Saving locally",
+    cancelTask: "Cancel task: {{prompt}}",
   },
 
   stage: {
@@ -206,6 +217,11 @@ export const en = {
     atMax: "Reached the limit of {{max}} input images",
     genStatus: "Generating · progressive preview",
     genCancel: "Cancel",
+    genCancelAll: "Cancel all",
+    genActive_one: "{{count}} task generating",
+    genActive_other: "{{count}} tasks generating in parallel",
+    genNoteParallel:
+      "Tasks generate and save independently · keep submitting new tasks",
     genNote: "Saved locally when done",
     genProgress: "{{done}}/{{total}} done",
     genNoteMulti: "One request per ratio · saved locally when all finish",

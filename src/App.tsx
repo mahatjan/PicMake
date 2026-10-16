@@ -4,8 +4,9 @@ import { AppDialogs } from "./containers/AppDialogs";
 import { ChromeArea } from "./containers/ChromeArea";
 import { CreateArea } from "./containers/CreateArea";
 import { DrawingLayer } from "./containers/DrawingLayer";
-import { ResultArea } from "./containers/ResultArea";
+import { GalleryArea } from "./containers/GalleryArea";
 import { PlaygroundArea } from "./containers/PlaygroundArea";
+import { ResultArea } from "./containers/ResultArea";
 import { startHistorySync } from "./flows/history-sync";
 import { startVideoSync } from "./flows/video";
 import { useWorkspaceAssets } from "./hooks/useWorkspaceAssets";
@@ -17,10 +18,11 @@ export default function App() {
   // display / sourceImages / thumbnailUrls 只算一次，避免重复读库和重复创建 URL
   const assets = useWorkspaceAssets();
 
-  // DOM 顺序即 Tab 顺序：顶栏 → 结果区（舞台、详情浮卡）→ 创作条
+  // DOM 顺序即 Tab 顺序：顶栏 → 首页画廊 → 结果区（舞台、详情浮卡）→ 创作条
   return (
     <>
       <ChromeArea assets={assets} />
+      <GalleryArea assets={assets} />
       <ResultArea assets={assets} />
       <CreateArea assets={assets} />
       <DrawingLayer />

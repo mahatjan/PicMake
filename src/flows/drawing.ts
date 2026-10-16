@@ -48,13 +48,19 @@ import {
   setPreviewId,
   showViewMask,
 } from "../store/workspace/actions";
-import { selectDisplayRow, selectRows } from "../store/workspace/selectors";
+import {
+  selectDisplayRow,
+  selectRows,
+  selectRun,
+} from "../store/workspace/selectors";
 import { downloadFile } from "./export";
 import { adjustInpaint, requestLeave } from "./navigation";
 
 /** 各画板/重绘入口共用的可用判定，规则见 canOpenDrawing；await 之后要重新调用 */
 function workspaceFree(): boolean {
-  const { run, draft, confirm, drawing } = useWorkspace.getState();
+  const state = useWorkspace.getState();
+  const run = selectRun(state);
+  const { draft, confirm, drawing } = state;
   return canOpenDrawing({
     run: run.phase,
     reading: draft.readId !== null,

@@ -28,16 +28,18 @@ import {
   type MissingResource,
   type PixelSize,
 } from "../lib/types";
-import { draftToParams, leaveDecision } from "../lib/workspace-rules";
+import { draftToParams, submitDecision } from "../lib/workspace-rules";
+import { uuid } from "../lib/uuid";
 import { useSettings } from "../store/settings";
 import { useWorkspace } from "../store/workspace";
-import { findRow } from "../store/workspace/selectors";
+import { findRow, selectRun } from "../store/workspace/selectors";
 import {
   beginRun,
   beginSave,
   discardUnsaved,
   endRun,
   finishSave,
+  markSubmitted,
   markUnsaved,
   requestPromptFocus,
   setConfirm,
@@ -57,21 +59,26 @@ export function toastError(error: unknown) {
   toast(errorMessage(error, t));
 }
 
-/** 进行中请求的取消句柄：同一时间最多一个（由 beginRun 保证）；多尺寸时所有请求共用它 */
-let abort: AbortController | null = null;
+/** 每个任务独立取消；同一任务内的多尺寸请求共用一个句柄。 */
+const controllers = new Map<string, AbortController>();
 
-export const cancelGenerate = () => abort?.abort();
+export function cancelGenerate(id?: string) {
+  for (const task of useWorkspace.getState().tasks) {
+    if (task.run.phase === "generating" && (!id || task.id === id))
+      controllers.get(task.id)?.abort();
+  }
+}
 
-/** 提交当前草稿；生成中、保存中忽略，有未保存结果时先确认放弃 */
+/** 提交后立即发起，不等待其他任务。 */
+async function startRun(params: GenParams, draft: EditDraft | null) {
+  await runGeneration(params, draft);
+}
+
+/** 提交当前草稿：校验后立即并行发起；有未保存结果时先确认放弃当前结果。 */
 export function generate() {
-  const { run, draft } = useWorkspace.getState();
-  // 草稿正是要提交的内容，不算被丢弃的修改（userWork = false）；会被替换的只有内存里的未保存结果
-  const decision = leaveDecision({
-    run: run.phase,
-    userWork: false,
-    usesDisplayed: false,
-  });
-  if (decision === "blocked") return;
+  const state = useWorkspace.getState();
+  const { draft } = state;
+  const decision = submitDecision({ run: selectRun(state).phase });
   const checked = draftToParams({
     form: draft.form,
     inpaint: draft.inpaint,
@@ -99,19 +106,26 @@ export function generate() {
       }
     : null;
   if (decision === "confirm-unsaved") {
+    const unsaved = state.tasks.find((task) => task.run.phase === "unsaved")!;
     setConfirm({
       title: t("confirm.unsavedGenerate.title"),
       desc: t("confirm.unsavedGenerate.desc"),
       onOk: () => {
         // 确认期间状态可能已变：不再是未保存结果时不重复发起
-        if (useWorkspace.getState().run.phase !== "unsaved") return;
-        discardUnsaved();
-        void runGeneration(params, edit);
+        if (
+          useWorkspace.getState().tasks.find((task) => task.id === unsaved.id)
+            ?.run.phase !== "unsaved"
+        )
+          return;
+        discardUnsaved(unsaved.id);
+        if (useWorkspace.getState().draft === draft) markSubmitted();
+        void startRun(params, edit);
       },
     });
     return;
   }
-  void runGeneration(params, edit);
+  markSubmitted();
+  void startRun(params, edit);
 }
 
 /** 再来一版：用记录的参数与输入源直接重发；局部重绘记录复用同一底图与 mask（仅 complete 态可达） */
@@ -132,7 +146,7 @@ export function regenerate(id: string) {
         inputFidelity: row.inputFidelity ?? "auto",
       }
     : null;
-  void runGeneration({ ...row.params }, draft);
+  void startRun({ ...row.params }, draft);
 }
 
 /** 尺寸按当前约束重算，恒合法 */
@@ -142,39 +156,46 @@ async function regenerateInpaint(row: HistoryRow) {
     toast(t("toast.cantRegenerate", { what: missingText(read.missing, t) }));
     return;
   }
-  await runGeneration(read.params, read.draft);
+  await startRun(read.params, read.draft);
 }
 
 /** 写库并展示结果；保存失败时结果留在内存（可查看、下载）。返回是否保存成功 */
-async function persist(prepared: PreparedGeneration): Promise<boolean> {
-  beginSave(prepared);
+async function persist(
+  prepared: PreparedGeneration,
+  id: string,
+): Promise<boolean> {
+  beginSave(prepared, id);
   try {
     await saveGeneration(prepared);
   } catch {
-    markUnsaved();
+    markUnsaved(id);
     toast(kindMessage("save-failed", t));
     return false;
   }
-  finishSave(prepared);
+  finishSave(prepared, id);
   return true;
 }
 
 /** 一次完整生成：占位 → 读来源 → 请求 → 写库；准备阶段已处于 generating，可以取消。
  *  params.sizes 存在时每个尺寸各发一个请求（多尺寸），见 generateMulti */
 async function runGeneration(params: GenParams, draft: EditDraft | null) {
+  const id = uuid();
   if (
-    !beginRun({
-      n: params.n,
-      size: params.size,
-      ...(params.sizes ? { sizes: params.sizes } : {}),
-    })
+    !beginRun(
+      {
+        n: params.n,
+        size: params.size,
+        ...(params.sizes ? { sizes: params.sizes } : {}),
+      },
+      { id, prompt: params.prompt, model: params.model },
+    )
   )
     return;
   // 配置在开始时读一次，不订阅 settings
   const { baseUrl, apiKey, streamEnabled } = useSettings.getState();
   const config = { baseUrl, apiKey, streamEnabled };
   const controller = new AbortController();
-  abort = controller;
+  controllers.set(id, controller);
   try {
     const originPrompt = draft
       ? await resolveOriginPrompt(draft.inputs)
@@ -186,6 +207,7 @@ async function runGeneration(params: GenParams, draft: EditDraft | null) {
       : undefined;
     if (params.sizes) {
       await generateMulti({
+        id,
         params,
         sizes: params.sizes,
         edit,
@@ -201,7 +223,9 @@ async function runGeneration(params: GenParams, draft: EditDraft | null) {
       config,
       {
         signal: controller.signal,
-        onPartial: (b64, index) => setPartial(b64ToBlob(b64), index),
+        onPartial: (b64, index) => {
+          if (!controller.signal.aborted) setPartial(b64ToBlob(b64), index, id);
+        },
       },
       edit,
     );
@@ -214,16 +238,16 @@ async function runGeneration(params: GenParams, draft: EditDraft | null) {
       undefined,
       originPrompt,
     );
-    if (await persist(prepared)) toast(t("toast.generated"));
+    if (await persist(prepared, id)) toast(t("toast.generated"));
   } catch (caught) {
-    endRun();
+    endRun(id);
     if (isAbortError(caught)) {
       toast(t("toast.cancelled"));
       return;
     }
     toastError(caught);
   } finally {
-    if (abort === controller) abort = null;
+    controllers.delete(id);
   }
 }
 
@@ -254,6 +278,7 @@ const errorKind = (error: unknown): ApiErrorKind =>
 /** 多尺寸：每个尺寸各发一个请求（n = 1），同时发出、互不影响，不自动重试。
  *  全部结束后，成功的按比例顺序合并为一条记录，失败的不入库；取消时已完成的照常保存 */
 async function generateMulti(job: {
+  id: string;
   params: GenParams;
   sizes: PixelSize[];
   edit: EditSubmission | undefined;
@@ -271,7 +296,12 @@ async function generateMulti(job: {
       const result = await requestImages(
         { ...params, size, n: 1, sizes: undefined },
         job.config,
-        { signal, onPartial: (b64) => setSlotPartial(index, b64ToBlob(b64)) },
+        {
+          signal,
+          onPartial: (b64) => {
+            if (!signal.aborted) setSlotPartial(index, b64ToBlob(b64), job.id);
+          },
+        },
         edit,
       );
       // 每个请求 n = 1：只取第一张
@@ -279,7 +309,7 @@ async function generateMulti(job: {
       const format = b64Format(b64) ?? params.outputFormat;
       const blob = b64ToBlob(b64, `image/${format}`);
       const actual = await actualSize(blob, size);
-      setSlotDone(index, blob);
+      setSlotDone(index, blob, job.id);
       return {
         status: "done",
         blob,
@@ -291,7 +321,7 @@ async function generateMulti(job: {
     } catch (error) {
       // 取消不算失败
       if (signal.aborted || isAbortError(error)) return { status: "aborted" };
-      setSlotFailed(index, errorKind(error));
+      setSlotFailed(index, errorKind(error), job.id);
       return { status: "failed", size, error };
     }
   };
@@ -310,7 +340,7 @@ async function generateMulti(job: {
 
   if (!done.length) {
     // 一张都没完成：取消同单尺寸取消；否则同单尺寸失败，提示第一个失败比例的错误，草稿保留
-    endRun();
+    endRun(job.id);
     if (signal.aborted || !failed.length) toast(t("toast.cancelled"));
     else toastError(failed[0].error);
     return;
@@ -324,7 +354,7 @@ async function generateMulti(job: {
     undefined,
     job.originPrompt,
   );
-  if (!(await persist(prepared))) return;
+  if (!(await persist(prepared, job.id))) return;
   if (signal.aborted) {
     toast(t("toast.cancelledSaved", { count: done.length }));
   } else if (failed.length) {

@@ -107,11 +107,14 @@ export function addVideoFiles(files: File[]) {
 export async function openVideoFromImage(imageId: string) {
   const state = useWorkspace.getState();
   if (!canOpenPlayground({ drawing: state.drawing !== null })) return;
-  const prepared =
-    state.run.phase === "saving" || state.run.phase === "unsaved"
-      ? state.run.prepared
-      : null;
-  const memory = [prepared, state.history.recent]
+  const memory = [
+    ...state.tasks.flatMap((task) =>
+      task.run.phase === "saving" || task.run.phase === "unsaved"
+        ? [task.run.prepared]
+        : [],
+    ),
+    state.history.recent,
+  ]
     .flatMap((pack) => pack?.images ?? [])
     .find((image) => image.id === imageId);
   const stored = memory ?? (await db.images.get(imageId));

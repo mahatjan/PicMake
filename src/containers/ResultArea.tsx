@@ -47,6 +47,10 @@ import {
 } from "../store/workspace/actions";
 import {
   selectCanWheelSwitch,
+  selectRun,
+  selectDisplayRun,
+  selectBusy,
+  selectGalleryVisible,
   selectSelectedImageId,
 } from "../store/workspace/selectors";
 
@@ -59,10 +63,11 @@ const MaskViewModal = lazy(() =>
 
 export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
   const { display, sourceImages } = assets;
-  // 生成生命周期：只有 generating 显示生成态；saving、unsaved 时舞台展示内存里的结果
-  const run = useWorkspace((s) => s.run);
-  const gen = run.phase === "generating" ? run : null;
-  const pending = run.phase === "saving" || run.phase === "unsaved";
+  // 查看已完成记录时，后台任务的进度不接管舞台、详情与轮播。
+  const run = useWorkspace(selectRun);
+  const displayRun = useWorkspace(selectDisplayRun);
+  const gen = displayRun.phase === "generating" ? displayRun : null;
+  const pending = run.phase !== "idle";
   const partialUrl = useObjectUrl(gen?.partial?.blob);
   // 多尺寸生成中：每格显示终稿或最新预览
   const slots = gen?.slots ?? null;
@@ -87,13 +92,19 @@ export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
     !!display.row.params.sizes &&
     display.images.length > 1;
   const viewport = useViewportSize(!!slots || multiDone);
-  useLeaveGuard(run.phase === "generating" || run.phase === "saving");
+  const busy = useWorkspace(selectBusy);
+  useLeaveGuard(busy);
   const selectedImageId = useWorkspace(selectSelectedImageId);
   const focusIdx = useWorkspace((s) => s.view.focusIdx);
   const lightboxId = useWorkspace((s) => s.view.lightboxId);
   const viewMask = useWorkspace((s) => s.view.viewMask);
   const viewMaskUrl = useObjectUrl(viewMask?.base.blob);
   const wheelEnabled = useWorkspace(selectCanWheelSwitch);
+  /** 画廊占着舞台：空状态引导让位，舞台也不再画生成态（生成卡在画廊网格里） */
+  const galleryVisible = useWorkspace(selectGalleryVisible);
+  const selectedId = useWorkspace((s) => s.nav.selectedId);
+  /** 详情浮卡、轮播、放大等只属于"用户点开的那条记录"，而不是刚保存的过渡结果 */
+  const onDetail = !!selectedId && !!display;
   const narrow = useNarrowViewport();
   /** 宽屏：默认展开，收起按记录 id 记忆，换记录后重新出现。
    *  窄屏：默认收起（浮卡会盖住结果和工具条），只在用户点开的那条记录上展开 */
@@ -103,7 +114,7 @@ export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
   const lightbox =
     display?.images.find((image) => image.id === lightboxId) ?? null;
   const detailVisible =
-    !!display &&
+    onDetail &&
     !gen &&
     detailClosedFor !== display.row.id &&
     (!narrow || detailOpenedFor === display.row.id);
@@ -130,6 +141,8 @@ export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
       <div className="pm-stage-col" ref={stageRef}>
         <Stage
           phase={gen ? "generating" : "idle"}
+          hideEmpty={galleryVisible}
+          hidden={galleryVisible}
           partial={
             gen?.partial && partialUrl
               ? { url: partialUrl, index: gen.partial.index }
@@ -146,12 +159,12 @@ export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
           onReuse={() => display && reuseParams(display.row.id)}
           onEdit={pending ? undefined : editSelectedImage}
           onDelete={() => display && deleteRecord(display.row.id)}
-          onCancel={cancelGenerate}
+          onCancel={() => cancelGenerate()}
           onStart={expandBar}
         />
       </div>
 
-      {display && !gen && narrow && !detailVisible && (
+      {onDetail && !gen && narrow && !detailVisible && (
         <DetailToggle
           onOpen={() => {
             setDetailClosedFor(null);
@@ -160,7 +173,7 @@ export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
         />
       )}
 
-      {display && detailVisible && (
+      {onDetail && detailVisible && (
         <DetailCard
           display={display}
           selectedImageId={selectedImageId}
@@ -186,7 +199,7 @@ export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
         />
       )}
 
-      {display && !gen && display.images.length > 1 && focusIdx !== null && (
+      {onDetail && !gen && display.images.length > 1 && focusIdx !== null && (
         <Carousel
           img={display.images[focusIdx]}
           prompt={display.row.prompt}

@@ -26,6 +26,7 @@ export const zhCN = {
 
   nav: {
     label: "主导航",
+    home: "首页",
     toLight: "切换到浅色模式",
     toDark: "切换到深色模式",
     history: "历史",
@@ -97,6 +98,16 @@ export const zhCN = {
     noMatchTitle: "没有匹配的历史记录",
     noMatchHint: "调整搜索词或筛选条件试试",
     footer: "全部数据仅保存在本机浏览器",
+  },
+
+  gallery: {
+    label: "作品画廊",
+    title: "历史记录",
+    count_one: "共 {{count}} 件作品",
+    count_other: "共 {{count}} 件作品",
+    generatingCard: "新作品生成中",
+    saving: "正在保存到本地",
+    cancelTask: "取消任务：{{prompt}}",
   },
 
   stage: {
@@ -197,6 +208,10 @@ export const zhCN = {
     atMax: "已达 {{max}} 张输入上限",
     genStatus: "正在生成 · 渐进预览",
     genCancel: "取消",
+    genCancelAll: "全部取消",
+    genActive_one: "{{count}} 个任务同时生成中",
+    genActive_other: "{{count}} 个任务同时生成中",
+    genNoteParallel: "任务独立生成并自动保存 · 可以继续提交新任务",
     genNote: "完成后自动保存到本地",
     genProgress: "已完成 {{done}}/{{total}}",
     genNoteMulti: "每个比例单独请求 · 全部结束后自动保存到本地",

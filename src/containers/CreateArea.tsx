@@ -35,6 +35,9 @@ import {
 } from "../store/workspace/actions";
 import {
   selectCanReturn,
+  selectRun,
+  selectBusy,
+  selectActiveCount,
   selectRunDone,
   selectRunTotal,
   selectShouldCollapseBar,
@@ -46,10 +49,16 @@ export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
   const focusSeq = useWorkspace((s) => s.view.focusSeq);
   const previewId = useWorkspace((s) => s.view.previewId);
   const lastDoneId = useWorkspace((s) => s.nav.lastDoneId);
-  const generating = useWorkspace((s) => s.run.phase === "generating");
-  const partialIndex = useWorkspace((s) =>
-    s.run.phase === "generating" ? (s.run.partial?.index ?? null) : null,
+  const generating = useWorkspace(selectBusy);
+  const activeCount = useWorkspace(selectActiveCount);
+  const run = useWorkspace(selectRun);
+  const generatingModel = useWorkspace(
+    (s) =>
+      s.tasks.find((task) => task.run === selectRun(s))?.model ??
+      s.draft.form.model,
   );
+  const partialIndex =
+    run.phase === "generating" ? (run.partial?.index ?? null) : null;
   // 多尺寸生成中的进度（已完成 / 总数）；单尺寸时总数为 0
   const runDone = useWorkspace(selectRunDone);
   const runTotal = useWorkspace(selectRunTotal);
@@ -66,8 +75,13 @@ export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
   const sketchSize = sketchInput?.upload
     ? { w: sketchInput.upload.width, h: sketchInput.upload.height }
     : null;
-  /** complete 态只在展示的确实是刚保存的那次生成时成立 */
-  const doneGen = lastDoneId && display?.row.id === lastDoneId ? display : null;
+  /** complete 态：展示的正是刚保存的那次生成，或在画廊里由刚保存的结果兜底（见 useWorkspaceAssets） */
+  const doneGen =
+    run.phase === "unsaved" || draft.dirty
+      ? null
+      : display?.row.id === lastDoneId
+        ? display
+        : assets.lastDoneDisplay;
   /** 预览的图：有展示记录时看它的来源图，否则看草稿里的输入图 */
   const previewImages = display ? sourceImages : draftImages;
 
@@ -105,6 +119,8 @@ export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
       <CreateBar
         mode={barMode}
         generating={generating}
+        generatingModel={generatingModel}
+        activeCount={activeCount}
         done={doneGen}
         partialIndex={partialIndex}
         progress={runTotal > 0 ? { done: runDone, total: runTotal } : null}
@@ -121,7 +137,7 @@ export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
         barRef={barRef}
         onPatch={patchForm}
         onGenerate={generate}
-        onCancel={cancelGenerate}
+        onCancel={() => cancelGenerate()}
         onFiles={(files) => {
           void addFiles(files);
         }}
