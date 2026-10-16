@@ -204,8 +204,12 @@ const form = (patch: Partial<GenForm> = {}): GenForm => ({
 });
 
 describe("nextSelection", () => {
-  it("首次加载选最近一条", () => {
-    expect(nextSelection(undefined, rows("a", "b"), null)).toBe("a");
+  it("首次加载有历史也保留新建页面", () => {
+    expect(nextSelection(undefined, rows("a", "b"), null)).toBeNull();
+  });
+
+  it("首次加载前已有选中项时保持不动", () => {
+    expect(nextSelection(undefined, rows("a", "b"), "b")).toBe("b");
   });
 
   it("首次加载且没有记录时为 null", () => {

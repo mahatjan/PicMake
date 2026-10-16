@@ -1,6 +1,11 @@
-/** 只测试参数映射与 SSE 解析，不发网络请求。 */
-import { describe, expect, it } from "vitest";
-import { createImageParser, editFormData, parseGenResponse } from "./client";
+/** 参数映射、SSE 解析与模拟 fetch 的请求契约，不发网络请求。 */
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  createImageParser,
+  editFormData,
+  parseGenResponse,
+  requestImages,
+} from "./client";
 import {
   ApiError,
   type EditSubmission,
@@ -38,6 +43,100 @@ const submission: EditSubmission = {
   ],
   inputFidelity: "high",
 };
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("流式配置的请求契约", () => {
+  const inpaint: EditSubmission = {
+    ...submission,
+    inpaint: {
+      maskImage: {
+        id: "mask",
+        blob: new Blob(["mask"], { type: "image/png" }),
+        format: "png",
+        width: 1,
+        height: 1,
+        mask: {
+          version: 1,
+          width: 1,
+          height: 1,
+          baseImageId: "source",
+          commands: [],
+        },
+      },
+    },
+  };
+
+  for (const streamEnabled of [undefined, true, false]) {
+    for (const [kind, edit] of [
+      ["生成", undefined],
+      ["编辑", submission],
+      ["局部重绘", inpaint],
+    ] as const) {
+      it(`${kind} streamEnabled=${streamEnabled}：只请求一次并解析完整 JSON`, async () => {
+        const fetchMock = vi
+          .fn()
+          .mockResolvedValue(
+            Response.json({ data: [{ b64_json: "final" }], usage }),
+          );
+        vi.stubGlobal("fetch", fetchMock);
+        const onPartial = vi.fn();
+        await expect(
+          requestImages(
+            params,
+            { baseUrl: "https://api.example/v1", apiKey: "key", streamEnabled },
+            { onPartial },
+            edit,
+          ),
+        ).resolves.toEqual({ images: ["final"], usage });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).toBe(
+          `https://api.example/v1/images/${edit ? "edits" : "generations"}`,
+        );
+        const fields = edit
+          ? Object.fromEntries((init.body as FormData).entries())
+          : JSON.parse(init.body);
+        if (streamEnabled === false) {
+          expect(fields).not.toHaveProperty("stream");
+          expect(fields).not.toHaveProperty("partial_images");
+        } else {
+          expect(String(fields.stream)).toBe("true");
+          expect(String(fields.partial_images)).toBe("3");
+        }
+        if (edit) expect(fields.image).toBeInstanceOf(Blob);
+        if (edit?.inpaint) expect(fields.mask).toBeInstanceOf(Blob);
+        expect(onPartial).not.toHaveBeenCalled();
+      });
+    }
+  }
+
+  it.each([true, false])(
+    "streamEnabled=%s：服务商拒绝请求时不自动重试",
+    async (streamEnabled) => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(
+          Response.json(
+            { error: { message: "Unsupported parameter" } },
+            { status: 400 },
+          ),
+        );
+      vi.stubGlobal("fetch", fetchMock);
+      await expect(
+        requestImages(params, {
+          baseUrl: "https://api.example",
+          apiKey: "key",
+          streamEnabled,
+        }),
+      ).rejects.toMatchObject({
+        message: "Unsupported parameter",
+        status: 400,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+});
 
 describe("编辑请求映射", () => {
   it("multipart 保留来源格式、保真度和生成参数", () => {

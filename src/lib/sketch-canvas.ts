@@ -1,6 +1,52 @@
 /** 草图 Canvas 侧：顺序重放、形状绘制、alpha 判空、白底合成导出；无 React 状态 */
-import { arrowHead, normalizeBox } from "./sketch";
-import type { SketchCommand, SketchDocument, SketchShape } from "./types";
+import { arrowHead, normalizeBox, resolveSketchCommands } from "./sketch";
+import type {
+  SketchCommand,
+  SketchDocument,
+  SketchShape,
+  SketchTextTransform,
+} from "./types";
+
+/** 文字命中框与选择框共用真实字体度量；清空前的文字不再参与选择。 */
+export function measureSketchTexts(
+  doc: SketchDocument,
+  cursor: number,
+  preview?: SketchTextTransform | null,
+) {
+  const canvas = document.createElement("canvas");
+  // 离屏 Canvas 不继承 <html lang>；显式对齐，避免 sans-serif 的字体度量不同。
+  canvas.lang = document.documentElement.lang;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return [];
+  let items: {
+    index: number;
+    text: Extract<SketchCommand, { type: "text" }>;
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  }[] = [];
+  resolveSketchCommands(doc, cursor, preview).forEach((text, index) => {
+    if (text.type === "clear") items = [];
+    if (text.type !== "text") return;
+    ctx.font = `${text.fontSize}px sans-serif`;
+    const m = ctx.measureText(text.content);
+    const ascent = m.actualBoundingBoxAscent || text.fontSize * 0.8;
+    const descent = m.actualBoundingBoxDescent || text.fontSize * 0.2;
+    items.push({
+      index,
+      text,
+      left: text.x - m.actualBoundingBoxLeft,
+      top: text.y - ascent,
+      width: Math.max(
+        m.width,
+        m.actualBoundingBoxLeft + m.actualBoundingBoxRight,
+      ),
+      height: ascent + descent,
+    });
+  });
+  return items;
+}
 
 /** 单个形状的绘制；调用方须已设置好指向逻辑坐标的 transform */
 export function drawSketchShape(
@@ -74,6 +120,7 @@ export function drawSketchCommand(
   cmd: SketchCommand,
   size: Pick<SketchDocument, "width" | "height">,
 ): void {
+  if (cmd.type === "text-transform") return;
   if (cmd.type === "clear") {
     ctx.clearRect(0, 0, size.width, size.height);
     return;
@@ -81,6 +128,16 @@ export function drawSketchCommand(
   if (cmd.type === "shape") {
     ctx.save();
     drawSketchShape(ctx, cmd);
+    ctx.restore();
+    return;
+  }
+  if (cmd.type === "text") {
+    ctx.save();
+    ctx.font = `${cmd.fontSize}px sans-serif`;
+    ctx.fillStyle = cmd.color;
+    ctx.textBaseline = "alphabetic";
+    ctx.textAlign = "left";
+    ctx.fillText(cmd.content, cmd.x, cmd.y);
     ctx.restore();
     return;
   }
@@ -113,10 +170,12 @@ export function replaySketch(
   doc: SketchDocument,
   cursor = doc.commands.length,
   scale = 1,
+  preview?: SketchTextTransform | null,
 ): void {
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.clearRect(0, 0, doc.width, doc.height);
-  for (let i = 0; i < cursor; i++) drawSketchCommand(ctx, doc.commands[i], doc);
+  for (const cmd of resolveSketchCommands(doc, cursor, preview))
+    drawSketchCommand(ctx, cmd, doc);
 }
 
 /** 空白判定：降采样到最长边 ≤512 扫描 alpha */
@@ -126,6 +185,7 @@ export function sketchHasInk(
 ): boolean {
   const scale = Math.min(1, 512 / Math.max(doc.width, doc.height));
   const canvas = document.createElement("canvas");
+  canvas.lang = document.documentElement.lang;
   canvas.width = Math.max(1, Math.round(doc.width * scale));
   canvas.height = Math.max(1, Math.round(doc.height * scale));
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -141,6 +201,7 @@ export async function exportSketchPng(
   doc: SketchDocument,
 ): Promise<Blob | null> {
   const strokes = document.createElement("canvas");
+  strokes.lang = document.documentElement.lang;
   strokes.width = doc.width;
   strokes.height = doc.height;
   const sctx = strokes.getContext("2d");

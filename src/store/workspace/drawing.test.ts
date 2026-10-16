@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ImageRow } from "../../db/schema";
 import { blankMask } from "../../lib/inpaint";
-import { blankSketch, SKETCH_MAX_COMMANDS } from "../../lib/sketch";
+import {
+  blankSketch,
+  SKETCH_MAX_COMMANDS,
+  resolveSketchCommands,
+} from "../../lib/sketch";
 import type {
   MaskCommand,
   MaskImage,
@@ -89,6 +93,91 @@ beforeEach(() => {
 });
 
 describe("草图", () => {
+  it("文字变换一步撤销重做；撤销后调整丢弃旧分支，非法调整不写入", () => {
+    const text = {
+      type: "text" as const,
+      content: "Text",
+      x: 10,
+      y: 50,
+      color: "#000",
+      fontSize: 32,
+    };
+    openSketch(
+      { ...blankSketch(1024, 1024), commands: [text] },
+      { kind: "new" },
+      null,
+    );
+    const move = {
+      type: "text-transform" as const,
+      target: 0,
+      x: 100,
+      y: 200,
+      fontSize: 64,
+    };
+    strokeSketch(move);
+    const resolved = () => resolveSketchCommands({ commands: committed() });
+    expect(resolved()[0]).toMatchObject({ x: 100, fontSize: 64 });
+    undoDrawing();
+    expect(resolved()[0]).toEqual(text);
+    redoDrawing();
+    expect(resolved()[0]).toMatchObject({ x: 100, fontSize: 64 });
+    undoDrawing();
+    strokeSketch({ ...move, x: 300 });
+    expect(commands()).toEqual([text, { ...move, x: 300 }]);
+    const before = state();
+    strokeSketch({ ...move, target: 1 });
+    expect(state()).toBe(before);
+  });
+
+  it("局部重绘不接受文字变换命令", () => {
+    openInpaint(beginInpaintOpening()!, inpaintSession());
+    const before = state();
+    strokeSketch({
+      type: "text-transform",
+      target: 0,
+      x: 100,
+      y: 100,
+      fontSize: 40,
+    });
+    expect(state()).toBe(before);
+  });
+  it("文字提交、撤销与重做，并在撤销后丢弃旧分支", () => {
+    openSketch(blankSketch(1024, 1024), { kind: "new" }, null);
+    const text: SketchCommand = {
+      type: "text",
+      content: "测试",
+      x: 10,
+      y: 50,
+      color: "#000",
+      fontSize: 32,
+    };
+    strokeSketch(text);
+    expect(committed()).toEqual([text]);
+    undoDrawing();
+    expect(committed()).toEqual([]);
+    redoDrawing();
+    expect(committed()).toEqual([text]);
+    undoDrawing();
+    strokeSketch({ ...text, content: "新文字" });
+    expect(commands()).toEqual([{ ...text, content: "新文字" }]);
+  });
+
+  it("局部重绘运行时也拒绝文字命令", () => {
+    const id = beginInpaintOpening()!;
+    openInpaint(id, inpaintSession());
+    const before = state();
+    strokeSketch({
+      type: "text",
+      content: "测试",
+      x: 10,
+      y: 50,
+      color: "#000",
+      fontSize: 32,
+    });
+    expect(state()).toBe(before);
+    expect(commands()).toEqual([]);
+  });
+
   it("openSketch：游标取已有命令数，openKey 是打开时的快照；已有画板时忽略", () => {
     const doc = { ...blankSketch(800, 600), commands: [stroke(1), stroke(2)] };
     expect(openSketch(doc, { kind: "attachment", index: 1 }, "img-1")).toBe(

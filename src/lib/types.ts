@@ -11,6 +11,8 @@ export type OutputFormat = "png" | "jpeg" | "webp";
 export interface ApiConfig {
   baseUrl: string;
   apiKey: string;
+  /** 默认启用；关闭时省略 stream 与 partial_images，兼容不支持流式的服务商。 */
+  streamEnabled?: boolean;
 }
 
 export const MODEL_NAMES: Record<ModelId, string> = {
@@ -109,7 +111,27 @@ export interface SketchShape {
   to: SketchPoint;
 }
 
-export type SketchCommand = SketchStroke | SketchShape | SketchClear;
+/** 单行文字；锚点为逻辑画布坐标中的字母基线，字体固定为 sans-serif。 */
+export interface SketchText {
+  type: "text";
+  content: string;
+  x: number;
+  y: number;
+  color: string;
+  fontSize: number;
+}
+
+/** 通过原始文字命令下标定位，保留每次调整以支持撤销重做。 */
+export interface SketchTextTransform {
+  type: "text-transform";
+  target: number;
+  x: number;
+  y: number;
+  fontSize: number;
+}
+
+export type SketchCommand =
+  SketchStroke | SketchShape | SketchClear | SketchText | SketchTextTransform;
 
 export interface SketchDocument {
   version: 1;

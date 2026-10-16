@@ -65,6 +65,153 @@
 .pm-sk-paper.eraser {
   cursor: none;
 }
+.pm-sk-paper.text {
+  cursor: text;
+}
+.pm-sk-text-object {
+  position: absolute;
+  pointer-events: none;
+}
+.pm-sk-text-target {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: move;
+  pointer-events: auto;
+  touch-action: none;
+}
+.pm-sk-text-target.on {
+  border-color: var(--pm-accent);
+}
+.pm-sk-text-resize {
+  position: absolute;
+  right: -22px;
+  top: -22px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--pm-sketch-ink);
+  cursor: nesw-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+.pm-sk-text-resize svg {
+  width: 24px;
+  height: 24px;
+  padding: 3px;
+  background: var(--pm-sketch-paper);
+  border: 1px solid var(--pm-accent);
+  border-radius: 5px;
+}
+.pm-sk-text-options {
+  position: absolute;
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: max-content;
+  max-width: calc(100% - 220px);
+  padding: 4px 8px;
+  border: 1px solid var(--pm-sketch-line);
+  border-radius: 12px;
+  background: var(--pm-sketch-paper);
+  color: var(--pm-sketch-ink);
+  box-shadow: 0 4px 16px var(--pm-sketch-line);
+}
+.pm-sk-text-options p {
+  margin: 0;
+  font-size: 12px;
+}
+.pm-sk-text-options button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+}
+.pm-sk-text-options button:hover {
+  background: var(--pm-sketch-hover);
+}
+.pm-sk-text-options button:disabled {
+  opacity: 0.4;
+}
+.pm-sk-text-editor {
+  position: absolute;
+  z-index: 8;
+  width: min(400px, calc(100% - 16px));
+  height: 116px;
+  padding: 8px;
+  border: 1px solid var(--pm-sketch-line);
+  border-radius: 12px;
+  background: var(--pm-sketch-paper);
+  color: var(--pm-sketch-ink);
+  box-shadow: 0 4px 16px var(--pm-sketch-line);
+}
+.pm-sk-text-editor input {
+  width: 100%;
+  height: 48px;
+  padding: 4px 8px;
+  font-family: sans-serif;
+  border: 1px solid var(--pm-sketch-line);
+  border-radius: 6px;
+  background: var(--pm-sketch-paper);
+}
+.pm-sk-text-editor input::placeholder {
+  font-size: 12px;
+  color: var(--pm-sketch-meta);
+}
+.pm-sk-text-editor input[aria-invalid="true"] {
+  border-color: var(--pm-error);
+}
+.pm-sk-text-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.pm-sk-text-actions span {
+  flex: 1;
+  color: var(--pm-sketch-meta);
+}
+.pm-sk-text-actions button {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 8px;
+}
+.pm-sk-text-actions button::before {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  z-index: -1;
+  border-radius: 6px;
+  pointer-events: none;
+}
+.pm-sk-text-actions button:enabled:active::before {
+  background: var(--pm-sketch-hover);
+}
+@media (hover: hover) {
+  .pm-sk-text-actions button:enabled:hover::before {
+    background: var(--pm-sketch-hover);
+  }
+}
+.pm-sk-text-actions button:disabled {
+  opacity: 0.4;
+}
 .pm-sk-paper canvas {
   position: absolute;
   inset: 0;
@@ -490,7 +637,8 @@
 }
 
 /* 右下确认 FAB：空白灰禁用 → 有墨淡橙 → hover 实心强调 */
-.pm-sk-use {
+.pm-sk-use,
+.pm-sk-save {
   position: absolute;
   right: 34px;
   bottom: 34px;
@@ -507,7 +655,8 @@
     color 0.15s,
     transform 0.15s;
 }
-.pm-sk-use:disabled {
+.pm-sk-use:disabled,
+.pm-sk-save:disabled {
   cursor: not-allowed;
 }
 .pm-sk-use.ready {
@@ -521,6 +670,16 @@
 }
 .pm-sk-use.busy svg {
   animation: pm-sk-spin 1s linear infinite;
+}
+.pm-sk-save {
+  bottom: 96px;
+  color: var(--pm-sketch-ink);
+}
+.pm-sk-save:disabled {
+  color: var(--pm-sketch-ink-dis);
+}
+.pm-sk-save:hover:not(:disabled) {
+  background: var(--pm-sketch-hover);
 }
 @keyframes pm-sk-spin {
   to {
@@ -543,11 +702,18 @@
 
 /* 画板控件焦点环 */
 .pm-sk-close:focus-visible,
+.pm-sk-text-target:focus-visible,
+.pm-sk-text-resize:focus-visible,
+.pm-sk-text-options button:focus-visible,
+.pm-sk-paper canvas:focus-visible,
+.pm-sk-text-editor input:focus-visible,
+.pm-sk-text-actions button:focus-visible,
 .pm-sk-fit:focus-visible,
 .pm-sk-tool:focus-visible,
 .pm-sk-shape-btn:focus-visible,
 .pm-sk-hist button:focus-visible,
 .pm-sk-use:focus-visible,
+.pm-sk-save:focus-visible,
 .pm-sk-sizer:focus-visible,
 .pm-sk-sw:focus-visible {
   outline: 2px solid var(--pm-accent);
@@ -582,7 +748,8 @@
     height: 34px;
   }
   /* 窄屏的历史条换到下一行，形状面板随之下移一行避开它 */
-  .pm-sk-shapes {
+  .pm-sk-shapes,
+  .pm-sk-text-options {
     top: 140px;
     max-width: calc(100% - 24px);
   }
@@ -594,11 +761,15 @@
   .pm-sk-sizer-wrap {
     left: 10px;
   }
-  .pm-sk-use {
+  .pm-sk-use,
+  .pm-sk-save {
     width: 44px;
     height: 44px;
     right: 16px;
     bottom: 18px;
+  }
+  .pm-sk-save {
+    bottom: 74px;
   }
   /* 四个工具按钮的胶囊居中后会撞上右侧历史条，历史条换到下一行
      （胶囊高 46px：top 16 起，62 会与它擦边，下移到 66 留出间隔） */

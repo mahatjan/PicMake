@@ -19,6 +19,7 @@ import {
   ApiError,
   clientError,
   type ApiErrorKind,
+  type ApiConfig,
   type EditDraft,
   type EditSubmission,
   type GenParams,
@@ -170,7 +171,8 @@ async function runGeneration(params: GenParams, draft: EditDraft | null) {
   )
     return;
   // 配置在开始时读一次，不订阅 settings
-  const { baseUrl, apiKey } = useSettings.getState();
+  const { baseUrl, apiKey, streamEnabled } = useSettings.getState();
+  const config = { baseUrl, apiKey, streamEnabled };
   const controller = new AbortController();
   abort = controller;
   try {
@@ -189,14 +191,14 @@ async function runGeneration(params: GenParams, draft: EditDraft | null) {
         edit,
         startedAt,
         originPrompt,
-        config: { baseUrl, apiKey },
+        config,
         signal: controller.signal,
       });
       return;
     }
     const result = await requestImages(
       params,
-      { baseUrl, apiKey },
+      config,
       {
         signal: controller.signal,
         onPartial: (b64, index) => setPartial(b64ToBlob(b64), index),
@@ -257,7 +259,7 @@ async function generateMulti(job: {
   edit: EditSubmission | undefined;
   startedAt: number;
   originPrompt: string | undefined;
-  config: { baseUrl: string; apiKey: string };
+  config: ApiConfig;
   signal: AbortSignal;
 }) {
   const { params, sizes, edit, signal } = job;

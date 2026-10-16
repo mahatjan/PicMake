@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   SKETCH_MAX_COMMANDS,
+  SKETCH_TEXT_MAX_CHARS,
   arrowHead,
   blankSketch,
   clampToCanvas,
@@ -17,9 +18,19 @@ import {
   sketchSnapshotKey,
   toLogicalPoint,
   totalPoints,
+  textSize,
   validateSketchDocument,
+  resolveSketchCommands,
+  transformSketchText,
+  resizeSketchText,
 } from "./sketch";
-import type { SketchCommand, SketchDocument, SketchShape } from "./types";
+import type {
+  SketchCommand,
+  SketchDocument,
+  SketchShape,
+  SketchText,
+  SketchTextTransform,
+} from "./types";
 
 type StrokeCmd = Extract<SketchCommand, { type: "stroke" }>;
 type ShapeCmd = Extract<SketchCommand, { type: "shape" }>;
@@ -78,6 +89,219 @@ describe("笔宽", () => {
   it("下限保护：细笔 ≥1.5、橡皮 ≥5", () => {
     expect(penWidth(0, doc)).toBeGreaterThanOrEqual(1.5);
     expect(eraserWidth(0, doc)).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe("草图文字", () => {
+  const text: SketchText = {
+    type: "text",
+    content: "测试 Text",
+    x: 0,
+    y: 100,
+    color: "#1A1A1A",
+    fontSize: 32,
+  };
+
+  it("字号随滑杆与画布短边缩放，并保护最小字号", () => {
+    for (const t of [0, 0.5, 1]) {
+      expect(textSize(t, { width: 1536, height: 1024 })).toBeCloseTo(
+        (0.015 + 0.065 * t) * 1024,
+      );
+      expect(textSize(t, { width: 1024, height: 1536 })).toBeCloseTo(
+        textSize(t, { width: 1536, height: 1024 }),
+      );
+      expect(textSize(t, { width: 10, height: 10 })).toBe(12);
+    }
+  });
+
+  it("兼容旧文档，接受单行文字和 200 字符边界", () => {
+    for (const commands of [
+      [],
+      [text],
+      [{ ...text, content: "字".repeat(SKETCH_TEXT_MAX_CHARS) }],
+    ]) {
+      const doc = { ...blankSketch(1024, 1024), commands };
+      expect(validateSketchDocument(doc)).toEqual(doc);
+    }
+  });
+
+  it("读取与提交均拒绝空白、换行、超长和非法属性", () => {
+    for (const overrides of [
+      { content: "" },
+      { content: "   " },
+      { content: "a\nb" },
+      { content: "a\rb" },
+      { content: "a\u2028b" },
+      { content: "x".repeat(SKETCH_TEXT_MAX_CHARS + 1) },
+      { content: 123 },
+      { x: Number.NaN },
+      { y: Infinity },
+      { x: "5" },
+      { color: "" },
+      { color: null },
+      { fontSize: 0 },
+      { fontSize: -1 },
+      { fontSize: Infinity },
+      { fontSize: "20" },
+    ]) {
+      const command = { ...text, ...overrides } as SketchText;
+      expect(
+        validateSketchDocument({
+          ...blankSketch(1024, 1024),
+          commands: [command],
+        }),
+      ).toBeNull();
+      expect(commitCommand(blankSketch(1024, 1024), 0, command)).toBeNull();
+    }
+  });
+
+  it("文字计入命令上限，不计入采样点，保留在快照中", () => {
+    const doc = blankSketch(1024, 1024);
+    const next = commitCommand(doc, 0, text)!;
+    expect(next.cursor).toBe(1);
+    expect(totalPoints(next.doc)).toBe(0);
+    expect(freezeSketch(next.doc, 1).commands).toEqual([text]);
+    expect(sketchSnapshotKey(next.doc)).not.toBe(sketchSnapshotKey(doc));
+    expect(
+      commitCommand(
+        { ...doc, commands: Array(SKETCH_MAX_COMMANDS).fill(text) },
+        SKETCH_MAX_COMMANDS,
+        text,
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("文字移动与缩放", () => {
+  const text: SketchText = {
+    type: "text",
+    content: "Text",
+    x: 100,
+    y: 200,
+    fontSize: 40,
+    color: "#000",
+  };
+  const doc: SketchDocument = { ...blankSketch(1024, 768), commands: [text] };
+  const move: SketchTextTransform = {
+    type: "text-transform",
+    target: 0,
+    x: 200,
+    y: 300,
+    fontSize: 60,
+  };
+
+  it("移动保留抓取偏移并限制锚点在画布内", () => {
+    expect(
+      transformSketchText(
+        text,
+        0,
+        "move",
+        { x: 120, y: 190 },
+        { x: 170, y: 230 },
+        doc,
+      ),
+    ).toEqual({ ...move, x: 150, y: 240, fontSize: 40 });
+    expect(
+      transformSketchText(
+        text,
+        0,
+        "move",
+        { x: 120, y: 190 },
+        { x: -1000, y: 1000 },
+        doc,
+      ),
+    ).toMatchObject({ x: 0, y: 768 });
+  });
+
+  it("角点缩放保持基线锚点，保护最小与最大字号", () => {
+    expect(
+      transformSketchText(
+        text,
+        0,
+        "resize",
+        { x: 200, y: 160 },
+        { x: 300, y: 120 },
+        doc,
+      ),
+    ).toMatchObject({ x: 100, y: 200, fontSize: 80 });
+    expect(resizeSketchText(40, 0.001, doc)).toBe(12);
+    expect(resizeSketchText(40, 100, doc)).toBe(768);
+    expect(
+      transformSketchText(text, 0, "resize", text, text, doc).fontSize,
+    ).toBe(40);
+  });
+
+  it("重放前缀与临时预览分别求值，不改原始命令与绘制层次", () => {
+    const ink = strokeCmd();
+    const document = {
+      ...doc,
+      commands: [text, ink, move, { ...move, x: 500 }],
+    };
+    expect(resolveSketchCommands(document, 2)).toEqual([text, ink]);
+    expect(resolveSketchCommands(document, 3)[0]).toMatchObject({
+      x: 200,
+      fontSize: 60,
+    });
+    expect(resolveSketchCommands(document)[0]).toMatchObject({ x: 500 });
+    expect(
+      resolveSketchCommands(document, 3, { ...move, x: 700 })[0],
+    ).toMatchObject({ x: 700 });
+    expect(document.commands[0]).toBe(text);
+    expect(resolveSketchCommands(document)[1]).toBe(ink);
+    expect(text.x).toBe(100);
+  });
+
+  it("调整被保存在确认快照中，文字本身不被替换", () => {
+    const next = commitCommand(doc, 1, move)!;
+    expect(validateSketchDocument(next.doc)).toEqual(next.doc);
+    expect(freezeSketch(next.doc, 2).commands).toEqual([text, move]);
+    expect(totalPoints(next.doc)).toBe(0);
+    expect(sketchSnapshotKey(next.doc)).not.toBe(sketchSnapshotKey(doc));
+  });
+
+  it("读取与提交拒绝无效引用、非有限属性和清空之前的文字", () => {
+    for (const command of [
+      { ...move, target: -1 },
+      { ...move, target: 1 },
+      { ...move, target: 0.5 },
+      { ...move, x: NaN },
+      { ...move, y: Infinity },
+      { ...move, fontSize: 0 },
+      { ...move, fontSize: Infinity },
+    ]) {
+      expect(commitCommand(doc, 1, command)).toBeNull();
+      expect(
+        validateSketchDocument({ ...doc, commands: [text, command] }),
+      ).toBeNull();
+    }
+    expect(commitCommand(doc, 0, move)).toBeNull();
+    expect(
+      commitCommand(
+        { ...doc, commands: [strokeCmd()] } as SketchDocument,
+        1,
+        move,
+      ),
+    ).toBeNull();
+    expect(
+      commitCommand(
+        { ...doc, commands: [text, { type: "clear" }] } as SketchDocument,
+        2,
+        move,
+      ),
+    ).toBeNull();
+    expect(
+      validateSketchDocument({
+        ...doc,
+        commands: [text, { type: "clear" }, move],
+      }),
+    ).toBeNull();
+    expect(
+      commitCommand(
+        { ...doc, commands: Array(SKETCH_MAX_COMMANDS).fill(text) },
+        SKETCH_MAX_COMMANDS,
+        move,
+      ),
+    ).toBeNull();
   });
 });
 

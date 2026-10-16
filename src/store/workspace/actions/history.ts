@@ -3,7 +3,7 @@ import type { HistoryRow } from "../../../db/schema";
 import { nextSelection } from "../../../lib/workspace-rules";
 import { set } from "./internal";
 
-/** liveQuery 回推：更新列表，并在同一次 set 里处理首次自动选中与删除回退 */
+/** liveQuery 回推：更新列表，并在同一次 set 里处理删除回退；首次加载保持当前页面 */
 export const rowsLoaded = (rows: HistoryRow[]) =>
   set((s) => ({
     history: { ...s.history, rows },

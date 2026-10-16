@@ -1,5 +1,5 @@
 /** OpenAI 兼容 API 客户端：图片为 b64_json，部分中转只给 url（下载后并入同一条管线）；
- *  流式走 SSE；单次请求事务，无降级无重试 */
+ *  可选 SSE 流式预览；单次请求事务，无降级无重试 */
 import { createParser } from "eventsource-parser";
 import { apiUrl } from "../lib/url";
 import {
@@ -96,6 +96,7 @@ export async function testConnection(
 
 function bodyFields(
   params: GenParams,
+  streamEnabled = true,
 ): Record<string, string | number | boolean> {
   return {
     model: MODEL_NAMES[params.model],
@@ -106,8 +107,7 @@ function bodyFields(
     background: params.background,
     output_format: params.outputFormat,
     moderation: "auto",
-    stream: true,
-    partial_images: 3,
+    ...(streamEnabled ? { stream: true, partial_images: 3 } : {}),
   };
 }
 
@@ -246,9 +246,10 @@ export interface StreamHandlers {
 export function editFormData(
   submission: EditSubmission,
   params: GenParams,
+  streamEnabled = true,
 ): FormData {
   const form = new FormData();
-  const fields = bodyFields(params);
+  const fields = bodyFields(params, streamEnabled);
   delete fields.moderation;
   for (const [key, value] of Object.entries(fields))
     form.append(key, String(value));
@@ -338,8 +339,8 @@ export async function requestImages(
         ...(!edit ? { "Content-Type": "application/json" } : {}),
       },
       body: edit
-        ? editFormData(edit, params)
-        : JSON.stringify(bodyFields(params)),
+        ? editFormData(edit, params, config.streamEnabled)
+        : JSON.stringify(bodyFields(params, config.streamEnabled)),
       signal: handlers.signal,
     });
   } catch (e) {

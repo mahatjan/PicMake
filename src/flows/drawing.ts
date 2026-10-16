@@ -49,6 +49,7 @@ import {
   showViewMask,
 } from "../store/workspace/actions";
 import { selectDisplayRow, selectRows } from "../store/workspace/selectors";
+import { downloadFile } from "./export";
 import { adjustInpaint, requestLeave } from "./navigation";
 
 /** 各画板/重绘入口共用的可用判定，规则见 canOpenDrawing；await 之后要重新调用 */
@@ -124,6 +125,31 @@ export function continueHistorySketch(imageId: string) {
     }
     openSketch(doc, { kind: "history" }, null);
   })();
+}
+
+/** 保存当前草图为原尺寸白底 PNG；不修改附件或关闭画板，URL 生命周期由 hook 管理。 */
+export async function downloadSketch(createUrl: (blob: Blob) => string) {
+  const drawing = useWorkspace.getState().drawing;
+  if (drawing?.kind !== "sketch" || drawing.confirming) return;
+  const { id, doc, cursor } = drawing;
+  setDrawingConfirming(true);
+  try {
+    const frozen = freezeSketch(doc, cursor);
+    const blob = await exportSketchPng(frozen);
+    if (!sameDrawing(id)) return;
+    if (!blob) {
+      toast(t("toast.sketchExportFailed"));
+      return;
+    }
+    downloadFile(
+      createUrl(blob),
+      `PicMake-sketch-${id.slice(0, 8)}-${frozen.width}x${frozen.height}.png`,
+    );
+  } catch {
+    if (sameDrawing(id)) toast(t("toast.sketchExportFailed"));
+  } finally {
+    if (sameDrawing(id)) setDrawingConfirming(false);
+  }
 }
 
 /** 使用草图：导出 PNG 落成附件；失败或超过张数上限时画板保留 */

@@ -75,11 +75,11 @@ export function openInpaint(
   return true;
 }
 
-/** 形状命令只属于草图：局部重绘的文档与提交入口都不接受它 */
+/** 形状、文字只属于草图：局部重绘只接受笔触与清空。 */
 function isMaskCommand(
   command: SketchCommand | MaskCommand,
 ): command is MaskCommand {
-  return command.type !== "shape";
+  return command.type === "stroke" || command.type === "clear";
 }
 
 /** 提交一条命令：丢弃重做分支，超过上限静默拒绝；重绘同时清除就地错误。
@@ -99,7 +99,7 @@ function commitDrawing(command: SketchCommand | MaskCommand) {
   };
 }
 
-/** 草图画板：笔触、形状或清空 */
+/** 草图画板：笔触、形状、文字或清空 */
 export const strokeSketch = (command: SketchCommand) =>
   set(commitDrawing(command));
 

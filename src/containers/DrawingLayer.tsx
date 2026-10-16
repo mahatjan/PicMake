@@ -4,11 +4,13 @@ import { useTranslation } from "react-i18next";
 import {
   confirmInpaint,
   confirmSketch,
+  downloadSketch,
   notifyDrawLimit,
   requestCloseInpaint,
   requestCloseSketch,
 } from "../flows/drawing";
 import { useObjectUrl } from "../hooks/useObjectUrl";
+import { useDownloadUrl } from "../hooks/useDownloadUrl";
 import { useWorkspace } from "../store/workspace";
 import {
   redoDrawing,
@@ -30,6 +32,7 @@ const SketchModal = lazy(() =>
 export function DrawingLayer() {
   const { t } = useTranslation();
   const drawing = useWorkspace((s) => s.drawing);
+  const createDownloadUrl = useDownloadUrl();
   const inpaintBaseUrl = useObjectUrl(
     drawing?.kind === "inpaint" ? drawing.base.blob : null,
   );
@@ -62,6 +65,7 @@ export function DrawingLayer() {
           onUndo={undoDrawing}
           onRedo={redoDrawing}
           onConfirm={confirmSketch}
+          onSave={() => downloadSketch(createDownloadUrl)}
           onRequestClose={requestCloseSketch}
           onLimit={notifyDrawLimit}
         />

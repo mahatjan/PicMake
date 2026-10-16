@@ -1,6 +1,7 @@
 /** 设置弹窗：纯展示的受控弹层 */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Plus, Trash2 } from "lucide-react";
 import {
   Button,
   Input,
@@ -13,10 +14,12 @@ import {
 import { LOCALE_NAMES } from "../../i18n/resources/locale-names";
 import { errorHint } from "../../i18n/errors";
 import { fmtBytes } from "../../lib/format";
+import type { ApiProfile, ApiProfilesDraft } from "../../lib/api-profiles";
+import { DEFAULT_BASE_URL } from "../../lib/url";
 import { LOCALES, type LocalePref } from "../../lib/locale";
 import type { ThemePref } from "../../lib/theme";
 import type { ApiErrorKind } from "../../lib/types";
-import { Segmented } from "../controls";
+import { Segmented, Switch } from "../controls";
 
 interface TestResult {
   ok: true;
@@ -35,8 +38,9 @@ type Outcome =
 /* ── 设置弹窗 ── */
 export function SettingsModal(props: {
   open: boolean;
-  baseUrl: string;
-  apiKey: string;
+  apiProfiles: ApiProfile[];
+  activeApiProfileId: string;
+  streamEnabled: boolean;
   videoApiKey: string;
   /** 本机存储统计：记录数、图片数、已用字节（浏览器不支持估算时为 null） */
   storage: { generations: number; images: number; usageBytes: number | null };
@@ -45,15 +49,50 @@ export function SettingsModal(props: {
   locale: LocalePref;
   onLocaleChange: (locale: LocalePref) => void;
   onTest: TestConn;
-  onSave: (baseUrl: string, apiKey: string, videoApiKey: string) => void;
+  onSave: (
+    draft: ApiProfilesDraft,
+    videoApiKey: string,
+    streamEnabled: boolean,
+  ) => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const [baseUrl, setBaseUrl] = useState(props.baseUrl);
-  const [apiKey, setApiKey] = useState(props.apiKey);
+  // 弹窗内编辑整份草稿，切换配置保留编辑，关闭时由父级卸载并丢弃。
+  const [draft, setDraft] = useState<ApiProfilesDraft>({
+    apiProfiles: props.apiProfiles,
+    activeApiProfileId: props.activeApiProfileId,
+  });
+  const activeProfile = draft.apiProfiles.find(
+    (profile) => profile.id === draft.activeApiProfileId,
+  )!;
+  const { baseUrl, apiKey } = activeProfile;
+  const patchProfile = (
+    patch: Partial<Pick<ApiProfile, "name" | "baseUrl" | "apiKey">>,
+  ) =>
+    setDraft((current) => ({
+      ...current,
+      apiProfiles: current.apiProfiles.map((profile) =>
+        profile.id === current.activeApiProfileId
+          ? { ...profile, ...patch }
+          : profile,
+      ),
+    }));
   const [videoApiKey, setVideoApiKey] = useState(props.videoApiKey);
+  const [streamEnabled, setStreamEnabled] = useState(props.streamEnabled);
   const [testing, setTesting] = useState(false);
-  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [tested, setTested] = useState<{
+    profileId: string;
+    baseUrl: string;
+    apiKey: string;
+    outcome: Outcome;
+  } | null>(null);
+  // 只展示当前地址和 Key 的测试结果，忽略切换配置或编辑后返回的过期结果。
+  const outcome =
+    tested?.profileId === activeProfile.id &&
+    tested.baseUrl === baseUrl &&
+    tested.apiKey === apiKey
+      ? tested.outcome
+      : null;
 
   const { generations, images, usageBytes } = props.storage;
   const storageParts = {
@@ -114,12 +153,83 @@ export function SettingsModal(props: {
               value={props.locale}
               onChange={props.onLocaleChange}
             />
+            <label htmlFor="s-profile">{t("settings.apiProfile")}</label>
+            <div className="pm-settings-profiles">
+              <select
+                id="s-profile"
+                value={draft.activeApiProfileId}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    activeApiProfileId: event.target.value,
+                  }))
+                }
+              >
+                {draft.apiProfiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name.trim() || t("settings.defaultProfile")}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="secondary"
+                size="sm"
+                isIconOnly
+                aria-label={t("settings.addProfile")}
+                onPress={() => {
+                  const profile: ApiProfile = {
+                    id: crypto.randomUUID(),
+                    name: t("settings.newProfileName", {
+                      index: draft.apiProfiles.length + 1,
+                    }),
+                    baseUrl: DEFAULT_BASE_URL,
+                    apiKey: "",
+                  };
+                  setDraft((current) => ({
+                    apiProfiles: [...current.apiProfiles, profile],
+                    activeApiProfileId: profile.id,
+                  }));
+                }}
+              >
+                <Plus size={16} aria-hidden="true" />
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                isIconOnly
+                isDisabled={draft.apiProfiles.length <= 1}
+                aria-label={t("settings.deleteProfile")}
+                onPress={() =>
+                  setDraft((current) => {
+                    if (current.apiProfiles.length <= 1) return current;
+                    const apiProfiles = current.apiProfiles.filter(
+                      (profile) => profile.id !== current.activeApiProfileId,
+                    );
+                    return {
+                      apiProfiles,
+                      activeApiProfileId: apiProfiles[0].id,
+                    };
+                  })
+                }
+              >
+                <Trash2 size={16} aria-hidden="true" />
+              </Button>
+            </div>
+            <p className="pm-hint">{t("settings.profileHint")}</p>
+            <label htmlFor="s-profile-name">{t("settings.profileName")}</label>
+            <Input
+              id="s-profile-name"
+              autoComplete="off"
+              placeholder={t("settings.defaultProfile")}
+              value={activeProfile.name}
+              onChange={(event) => patchProfile({ name: event.target.value })}
+            />
             <label htmlFor="s-base">{t("settings.baseUrl")}</label>
             <Input
               id="s-base"
               autoComplete="off"
               value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
+              onChange={(e) => patchProfile({ baseUrl: e.target.value })}
             />
             <p className="pm-hint">{t("settings.baseUrlHint")}</p>
             <label htmlFor="s-key">{t("settings.apiKey")}</label>
@@ -128,7 +238,7 @@ export function SettingsModal(props: {
               type="password"
               autoComplete="off"
               value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              onChange={(e) => patchProfile({ apiKey: e.target.value })}
             />
             {resultText && (
               <p className={"pm-tconn" + (outcome?.ok ? " ok" : "")}>
@@ -136,6 +246,15 @@ export function SettingsModal(props: {
               </p>
             )}
             <p className="pm-hint">{t("settings.keyHint")}</p>
+            <div className="pm-settings-stream">
+              <span>{t("settings.streamEnabled")}</span>
+              <Switch
+                checked={streamEnabled}
+                onChange={setStreamEnabled}
+                ariaLabel={t("settings.streamEnabled")}
+              />
+            </div>
+            <p className="pm-hint">{t("settings.streamHint")}</p>
             <label htmlFor="s-video-key">{t("settings.videoKey")}</label>
             <Input
               id="s-video-key"
@@ -152,11 +271,14 @@ export function SettingsModal(props: {
                 isDisabled={testing}
                 onPress={() => {
                   setTesting(true);
-                  setOutcome(null);
+                  setTested(null);
                   void props.onTest(baseUrl, apiKey).then((r) => {
                     setTesting(false);
-                    setOutcome(
-                      r.ok
+                    setTested({
+                      profileId: activeProfile.id,
+                      baseUrl,
+                      apiKey,
+                      outcome: r.ok
                         ? {
                             ok: true,
                             models: r.models.length,
@@ -165,7 +287,7 @@ export function SettingsModal(props: {
                             ),
                           }
                         : r,
-                    );
+                    });
                   });
                 }}
               >
@@ -173,7 +295,7 @@ export function SettingsModal(props: {
               </Button>
               <Button
                 variant="primary"
-                onPress={() => props.onSave(baseUrl, apiKey, videoApiKey)}
+                onPress={() => props.onSave(draft, videoApiKey, streamEnabled)}
               >
                 {t("common.save")}
               </Button>

@@ -260,7 +260,7 @@ export function CreateBar(
     mode: "mini" | "full";
     generating: boolean;
     done: DisplayGen | null;
-    partialIndex: number;
+    partialIndex: number | null;
     /** 多尺寸生成中已完成的请求数与总数；单尺寸为 null */
     progress: { done: number; total: number } | null;
     onCancel: () => void;

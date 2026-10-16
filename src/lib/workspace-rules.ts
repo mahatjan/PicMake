@@ -108,13 +108,13 @@ export function wheelTarget(
   return next === index ? null : rows[next].id;
 }
 
-/** liveQuery 回推后的选中项：首次加载选最近一条；只有原选中项确实从列表中删除时才回退 */
+/** liveQuery 回推后的选中项：首次加载保留新建页面；只有原选中项确实从列表中删除时才回退 */
 export function nextSelection(
   prev: readonly { id: string }[] | undefined,
   next: readonly { id: string }[],
   selectedId: string | null,
 ): string | null {
-  if (!prev) return next[0]?.id ?? null;
+  if (!prev) return selectedId;
   // 写入完成可早于 liveQuery 回推：选中项不在旧列表里时保持不动
   if (
     selectedId &&

@@ -226,6 +226,7 @@ describe("展示记录", () => {
 describe("resetWorkspace", () => {
   it("清空返回目标、完成标记、草稿与查看状态；不传参数保留选中项", () => {
     rowsLoaded([row("a"), row("b")]);
+    selectRecord("a");
     setReturnId("b");
     setLastDoneId("a");
     initializeDraft(undefined, [{ imageId: "x" }]);

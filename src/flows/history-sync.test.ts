@@ -5,6 +5,7 @@ vi.mock("@heroui/react", () => ({ toast: vi.fn() }));
 import { toast } from "@heroui/react";
 import type { HistoryRow } from "../db/schema";
 import { initialWorkspace, useWorkspace } from "../store/workspace";
+import { selectRecord } from "../store/workspace/actions";
 import { startHistorySync, type RowsObservable } from "./history-sync";
 
 const row = (id: string) => ({ id }) as HistoryRow;
@@ -33,12 +34,13 @@ beforeEach(() => {
 });
 
 describe("startHistorySync", () => {
-  it("回推写入列表：首次选中最近一条，删除选中项后回退", () => {
+  it("回推写入列表：首次保留新建页面，手动选中后删除仍回退", () => {
     const source = fakeSource();
     startHistorySync(source.observe);
     source.push([row("b"), row("a")]);
     expect(state().history.rows?.map((r) => r.id)).toEqual(["b", "a"]);
-    expect(state().nav.selectedId).toBe("b");
+    expect(state().nav.selectedId).toBeNull();
+    selectRecord("b");
     source.push([row("a")]);
     expect(state().nav.selectedId).toBe("a");
   });

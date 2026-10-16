@@ -4,19 +4,28 @@ import { t } from "../i18n";
 import { downloadName } from "../lib/download";
 import type { DisplayGen } from "../lib/view-models";
 
+export function downloadFile(url: string, name: string) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+}
+
 export function downloadImage(display: DisplayGen, index: number) {
   const image = display.images[index];
   if (!image) return;
-  const a = document.createElement("a");
-  a.href = image.url;
   // 多尺寸记录的文件名带上图片的实际像素，拿到文件就知道是哪个尺寸
-  a.download = downloadName(
-    display.row.id,
-    index,
-    image.format,
-    display.row.params.sizes ? { w: image.width, h: image.height } : undefined,
+  downloadFile(
+    image.url,
+    downloadName(
+      display.row.id,
+      index,
+      image.format,
+      display.row.params.sizes
+        ? { w: image.width, h: image.height }
+        : undefined,
+    ),
   );
-  a.click();
 }
 
 export function downloadAll(display: DisplayGen) {

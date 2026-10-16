@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@heroui/react", () => ({ toast: vi.fn() }));
 vi.mock("../db/schema", () => ({ db: { images: { get: vi.fn() } } }));
 vi.mock("../lib/sketch-canvas", () => ({ exportSketchPng: vi.fn() }));
+vi.mock("./export", () => ({ downloadFile: vi.fn() }));
 vi.mock("../lib/inpaint-canvas", () => ({ exportMaskPng: vi.fn() }));
 vi.mock("../lib/image-orientation", () => ({
   readImageMeta: vi.fn(),
@@ -32,16 +33,19 @@ import {
   setConfirm,
   strokeMask,
   strokeSketch,
+  undoDrawing,
 } from "../store/workspace/actions";
 import {
   confirmInpaint,
   confirmSketch,
+  downloadSketch,
   editSketchAttachment,
   openSketchNew,
   requestCloseInpaint,
   requestCloseSketch,
   startInpaintFromInput,
 } from "./drawing";
+import { downloadFile } from "./export";
 
 const state = () => useWorkspace.getState();
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -86,6 +90,7 @@ beforeEach(() => {
   vi.mocked(toast).mockClear();
   vi.mocked(db.images.get).mockReset();
   vi.mocked(exportSketchPng).mockReset();
+  vi.mocked(downloadFile).mockReset();
   vi.mocked(exportMaskPng).mockReset();
   vi.mocked(readImageMeta).mockReset();
   vi.mocked(prepareInpaintBase).mockReset();
@@ -158,6 +163,113 @@ describe("editSketchAttachment", () => {
       replacesImageId: "sk",
       origin: { kind: "attachment", index: 2 },
     });
+  });
+});
+
+describe("downloadSketch", () => {
+  const open = () => {
+    openSketch(blankSketch(100, 80), { kind: "new" }, null);
+    strokeSketch(stroke(1));
+    return state().drawing!.id;
+  };
+
+  it("下载当前游标处的 PNG，画板、重做分支和草稿保持不变", async () => {
+    const id = open();
+    strokeSketch(stroke(2));
+    undoDrawing();
+    const before = state();
+    const blob = new Blob(["png"], { type: "image/png" });
+    const createUrl = vi.fn(() => "blob:sketch");
+    vi.mocked(exportSketchPng).mockResolvedValue(blob);
+
+    await downloadSketch(createUrl);
+
+    expect(exportSketchPng).toHaveBeenCalledWith({
+      ...blankSketch(100, 80),
+      commands: [stroke(1)],
+    });
+    expect(createUrl).toHaveBeenCalledWith(blob);
+    expect(downloadFile).toHaveBeenCalledWith(
+      "blob:sketch",
+      `PicMake-sketch-${id.slice(0, 8)}-100x80.png`,
+    );
+    expect(state().drawing).toEqual(before.drawing);
+    expect(state().draft).toBe(before.draft);
+  });
+
+  it("保存期间拦截重复下载、使用草图与关闭请求，完成后可再次保存", async () => {
+    open();
+    const createUrl = vi.fn(() => "blob:sketch");
+    vi.mocked(exportSketchPng).mockResolvedValue(new Blob(["png"]));
+    const pending = downloadSketch(createUrl);
+    expect(state().drawing).toMatchObject({ confirming: true });
+    const repeated = downloadSketch(createUrl);
+    confirmSketch();
+    requestCloseSketch();
+    expect(exportSketchPng).toHaveBeenCalledTimes(1);
+    expect(state().confirm).toBeNull();
+    await Promise.all([pending, repeated]);
+    await downloadSketch(createUrl);
+    expect(downloadFile).toHaveBeenCalledTimes(2);
+    expect(state().drawing).toMatchObject({ confirming: false });
+  });
+
+  it.each(["null", "throw"])(
+    "导出失败（%s）：提示且可重试",
+    async (failure) => {
+      open();
+      const createUrl = vi.fn(() => "blob:sketch");
+      if (failure === "null")
+        vi.mocked(exportSketchPng).mockResolvedValue(null);
+      else vi.mocked(exportSketchPng).mockRejectedValue(new Error("canvas"));
+      await downloadSketch(createUrl);
+      expect(toast).toHaveBeenCalledWith("草图导出失败，请重试");
+      expect(state().drawing).toMatchObject({ confirming: false, cursor: 1 });
+      expect(createUrl).not.toHaveBeenCalled();
+      expect(downloadFile).not.toHaveBeenCalled();
+
+      vi.mocked(exportSketchPng).mockResolvedValue(new Blob(["png"]));
+      await downloadSketch(createUrl);
+      expect(downloadFile).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("下载失败：解锁画板并提示", async () => {
+    open();
+    vi.mocked(exportSketchPng).mockResolvedValue(new Blob(["png"]));
+    vi.mocked(downloadFile).mockImplementation(() => {
+      throw new Error("download");
+    });
+    await downloadSketch(() => "blob:sketch");
+    expect(state().drawing).toMatchObject({ confirming: false });
+    expect(toast).toHaveBeenCalledWith("草图导出失败，请重试");
+  });
+
+  it.each([false, true])(
+    "异步导出后会话已关闭或替换（%s）：丢弃结果",
+    async (replace) => {
+      const id = open();
+      const createUrl = vi.fn(() => "blob:sketch");
+      vi.mocked(exportSketchPng).mockResolvedValue(new Blob(["png"]));
+      const pending = downloadSketch(createUrl);
+      closeDrawing(id);
+      if (replace) openSketch(blankSketch(64, 64), { kind: "new" }, null);
+      const current = state().drawing;
+      await pending;
+      expect(state().drawing).toBe(current);
+      expect(createUrl).not.toHaveBeenCalled();
+      expect(downloadFile).not.toHaveBeenCalled();
+      expect(toast).not.toHaveBeenCalled();
+    },
+  );
+
+  it("没有草图会话或处于局部重绘时忽略下载", async () => {
+    const createUrl = vi.fn(() => "blob:sketch");
+    await downloadSketch(createUrl);
+    openInpaintSession();
+    await downloadSketch(createUrl);
+    expect(exportSketchPng).not.toHaveBeenCalled();
+    expect(createUrl).not.toHaveBeenCalled();
   });
 });
 

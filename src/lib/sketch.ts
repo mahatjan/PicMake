@@ -7,6 +7,8 @@ import type {
   SketchShape,
   SketchShapeKind,
   SketchStroke,
+  SketchText,
+  SketchTextTransform,
 } from "./types";
 
 /** 固定色板（id 对应 i18n 资源 sketch.colors.*，用于无障碍名称；hex 为实际绘画颜色，不随主题） */
@@ -31,6 +33,7 @@ export type SketchColorId = (typeof SKETCH_PALETTE)[number]["id"];
 /** 内存保护阈值（建议值） */
 export const SKETCH_MAX_COMMANDS = 2000;
 export const SKETCH_MAX_POINTS = 100000;
+export const SKETCH_TEXT_MAX_CHARS = 200;
 /** 输出为 auto 时的新画布尺寸 */
 export const SKETCH_DEFAULT_SIZE = 1024;
 
@@ -74,6 +77,119 @@ export function makeStroke(
   return tool === "pen"
     ? { type: "stroke", tool, color, width, points: [] }
     : { type: "stroke", tool, width, points: [] };
+}
+
+/** 字号同样随画布短边缩放，最小 12 逻辑像素。 */
+export function textSize(
+  t: number,
+  doc: Pick<SketchDocument, "width" | "height">,
+): number {
+  return Math.max(12, (0.015 + 0.065 * t) * Math.min(doc.width, doc.height));
+}
+
+/** 输入与提交、读取共用规则：仅接受有可见内容的单行文字。 */
+export function isValidSketchText(value: unknown): value is SketchText {
+  if (!value || typeof value !== "object") return false;
+  const c = value as SketchText;
+  return (
+    c.type === "text" &&
+    typeof c.content === "string" &&
+    c.content.trim().length > 0 &&
+    c.content.length <= SKETCH_TEXT_MAX_CHARS &&
+    !/[\r\n\u2028\u2029]/u.test(c.content) &&
+    typeof c.color === "string" &&
+    !!c.color &&
+    Number.isFinite(c.fontSize) &&
+    c.fontSize > 0 &&
+    finitePoint(c)
+  );
+}
+
+/** 调整只能引用当前前缀中、最后一次清空之后的原始文字。 */
+export function isValidTextTransform(
+  cmd: SketchTextTransform,
+  commands: readonly SketchCommand[],
+  cursor: number,
+): boolean {
+  return (
+    Number.isInteger(cmd.target) &&
+    cmd.target >= 0 &&
+    cmd.target < cursor &&
+    commands[cmd.target]?.type === "text" &&
+    !commands.slice(cmd.target + 1, cursor).some((c) => c.type === "clear") &&
+    finitePoint(cmd) &&
+    Number.isFinite(cmd.fontSize) &&
+    cmd.fontSize > 0
+  );
+}
+
+/** 先求出文字的最终位置再按原顺序绘制，保留文字与笔画、橡皮的层次。 */
+export function resolveSketchCommands(
+  doc: Pick<SketchDocument, "commands">,
+  cursor = doc.commands.length,
+  preview?: SketchTextTransform | null,
+): SketchCommand[] {
+  const result = doc.commands.slice(0, cursor);
+  const apply = (cmd: SketchTextTransform) => {
+    const original = result[cmd.target];
+    if (original?.type === "text")
+      result[cmd.target] = {
+        ...original,
+        x: cmd.x,
+        y: cmd.y,
+        fontSize: cmd.fontSize,
+      };
+  };
+  for (const cmd of result) if (cmd.type === "text-transform") apply(cmd);
+  if (preview) apply(preview);
+  return result;
+}
+
+/** 指针移动以逻辑坐标计算；缩放固定基线锚点，沿手柄初始方向投影。 */
+export function transformSketchText(
+  text: SketchText,
+  target: number,
+  mode: "move" | "resize",
+  from: SketchPoint,
+  to: SketchPoint,
+  doc: Pick<SketchDocument, "width" | "height">,
+): SketchTextTransform {
+  const point =
+    mode === "move"
+      ? clampToCanvas(
+          {
+            x: text.x + to.x - from.x,
+            y: text.y + to.y - from.y,
+          },
+          doc,
+        )
+      : text;
+  const vx = from.x - text.x,
+    vy = from.y - text.y;
+  const length = vx * vx + vy * vy;
+  const ratio =
+    length > 0 ? ((to.x - text.x) * vx + (to.y - text.y) * vy) / length : 1;
+  return {
+    type: "text-transform",
+    target,
+    x: point.x,
+    y: point.y,
+    fontSize:
+      mode === "resize"
+        ? resizeSketchText(text.fontSize, ratio, doc)
+        : text.fontSize,
+  };
+}
+
+export function resizeSketchText(
+  fontSize: number,
+  ratio: number,
+  doc: Pick<SketchDocument, "width" | "height">,
+): number {
+  return Math.max(
+    12,
+    Math.min(Math.max(12, Math.min(doc.width, doc.height)), fontSize * ratio),
+  );
 }
 
 /* ── 形状：几何规则 ── */
@@ -265,6 +381,12 @@ export function commitCommand<D extends SketchDocument>(
   command: D["commands"][number],
 ): { doc: D; cursor: number } | null {
   if (doc.commands.length >= SKETCH_MAX_COMMANDS) return null;
+  if (command.type === "text" && !isValidSketchText(command)) return null;
+  if (
+    command.type === "text-transform" &&
+    !isValidTextTransform(command, doc.commands, cursor)
+  )
+    return null;
   return {
     doc: { ...doc, commands: [...doc.commands.slice(0, cursor), command] },
     cursor: cursor + 1,
@@ -311,7 +433,11 @@ export function validateSketchDocument(value: unknown): SketchDocument | null {
     !width ||
     !height ||
     !Array.isArray(commands) ||
-    !commands.every(isValidCommand)
+    !commands.every((cmd, index) =>
+      cmd?.type === "text-transform"
+        ? isValidTextTransform(cmd, commands, index)
+        : isValidCommand(cmd),
+    )
   )
     return null;
   return doc as SketchDocument;
@@ -322,6 +448,7 @@ function isValidCommand(cmd: unknown): boolean {
   const c = cmd as SketchCommand;
   if (c.type === "clear") return true;
   if (c.type === "stroke") return Array.isArray(c.points);
+  if (c.type === "text") return isValidSketchText(c);
   if (c.type !== "shape") return false;
   return (
     isShapeKind(c.shape) &&

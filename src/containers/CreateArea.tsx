@@ -48,7 +48,7 @@ export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
   const lastDoneId = useWorkspace((s) => s.nav.lastDoneId);
   const generating = useWorkspace((s) => s.run.phase === "generating");
   const partialIndex = useWorkspace((s) =>
-    s.run.phase === "generating" ? (s.run.partial?.index ?? 0) : 0,
+    s.run.phase === "generating" ? (s.run.partial?.index ?? null) : null,
   );
   // 多尺寸生成中的进度（已完成 / 总数）；单尺寸时总数为 0
   const runDone = useWorkspace(selectRunDone);

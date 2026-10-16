@@ -41,6 +41,42 @@
   gap: 8px;
   margin-top: 14px;
 }
+.pm-settings-stream {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--pm-text-2);
+}
+.pm-settings-profiles {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.pm-settings-profiles select {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--pm-line-2);
+  border-radius: 8px;
+  background: var(--pm-panel-solid);
+  color: var(--pm-text-1);
+  font: inherit;
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+.pm-settings-profiles select:focus-visible {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 2px;
+}
+.pm-settings-profiles button {
+  flex: none;
+}
 .pm-mbtns > * {
   flex: 1;
 }
@@ -439,7 +475,7 @@
   margin-bottom: 24px;
 }
 
-/* 行星标：hover/聚焦/已收藏时常驻 */
+/* 触屏星标常驻，避免浏览器把第一次点击用于模拟 hover、第二次才打开记录。 */
 .pm-drow {
   position: relative;
 }
@@ -455,13 +491,19 @@
   height: 22px;
   border-radius: 6px;
   color: var(--pm-text-3);
-  opacity: 0;
+  opacity: 1;
   transition: opacity 0.12s;
 }
-.pm-drow:hover .pm-dstar,
-.pm-dstar:focus-visible,
-.pm-dstar.on {
-  opacity: 1;
+/* 只有精确指针且支持悬停时，才隐藏未收藏的星标。 */
+@media (hover: hover) and (pointer: fine) {
+  .pm-dstar {
+    opacity: 0;
+  }
+  .pm-drow:hover .pm-dstar,
+  .pm-dstar:focus-visible,
+  .pm-dstar.on {
+    opacity: 1;
+  }
 }
 .pm-dstar.on {
   color: var(--pm-accent);

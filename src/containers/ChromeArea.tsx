@@ -4,10 +4,10 @@ import { TopNav } from "../components/TopNav";
 import { HistoryDrawer } from "../components/overlays/HistoryDrawer";
 import { SettingsModal } from "../components/overlays/SettingsModal";
 import { saveSettings, testConnection } from "../flows/settings";
-import { selectHistory, toggleStar } from "../flows/navigation";
+import { newGeneration, selectHistory, toggleStar } from "../flows/navigation";
 import { useTheme } from "../hooks/useTheme";
 import type { WorkspaceAssets } from "../hooks/useWorkspaceAssets";
-import { canOpenPlayground } from "../lib/workspace-rules";
+import { canOpenPlayground, leaveDecision } from "../lib/workspace-rules";
 import { useSettings } from "../store/settings";
 import { useWorkspace } from "../store/workspace";
 import {
@@ -22,8 +22,9 @@ import {
 export function ChromeArea({ assets }: { assets: WorkspaceAssets }) {
   const { rows, display, thumbnailUrls } = assets;
   const theme = useTheme();
-  const baseUrl = useSettings((s) => s.baseUrl);
-  const apiKey = useSettings((s) => s.apiKey);
+  const apiProfiles = useSettings((s) => s.apiProfiles);
+  const activeApiProfileId = useSettings((s) => s.activeApiProfileId);
+  const streamEnabled = useSettings((s) => s.streamEnabled);
   const videoApiKey = useSettings((s) => s.videoApiKey);
   const locale = useSettings((s) => s.locale);
   const setLocale = useSettings((s) => s.setLocale);
@@ -31,6 +32,14 @@ export function ChromeArea({ assets }: { assets: WorkspaceAssets }) {
   const settingsOpen = useWorkspace((s) => s.view.settingsOpen);
   const playgroundOpen = useWorkspace((s) => s.view.playgroundOpen);
   const drawing = useWorkspace((s) => s.drawing !== null);
+  const canNew = useWorkspace(
+    (s) =>
+      leaveDecision({
+        run: s.run.phase,
+        userWork: false,
+        usesDisplayed: false,
+      }) !== "blocked",
+  );
 
   const [usageBytes, setUsageBytes] = useState<number | null>(null);
   useEffect(() => {
@@ -45,6 +54,8 @@ export function ChromeArea({ assets }: { assets: WorkspaceAssets }) {
       <TopNav
         theme={theme.resolved}
         onToggleTheme={theme.toggle}
+        onNew={newGeneration}
+        canNew={canNew}
         onHistory={openDrawer}
         onSettings={openSettings}
         videoOpen={playgroundOpen}
@@ -68,8 +79,9 @@ export function ChromeArea({ assets }: { assets: WorkspaceAssets }) {
       <SettingsModal
         key={settingsOpen ? "settings-open" : "settings-closed"}
         open={settingsOpen}
-        baseUrl={baseUrl}
-        apiKey={apiKey}
+        apiProfiles={apiProfiles}
+        activeApiProfileId={activeApiProfileId}
+        streamEnabled={streamEnabled}
         videoApiKey={videoApiKey}
         storage={{
           generations: rows.length,

@@ -340,14 +340,14 @@
    工具条默认停在距底 200px。创作条被输入框撑高后，--pm-bar-top 是条上沿到视口底边的距离，
    工具条改贴在条上方 10px，舞台留白同步上移；条没超过预留高度时保持原位。 */
 @media (max-width: 760px) {
-  /* 顶栏在左（约 14+128px）、胶囊从 158px 起到右缘，中间留缝，避免和 pm-nav 叠在一起 */
+  /* 窄屏导航占满一行操作空间，生成进度放到导航下方，保留取消按钮的空间。 */
   .pm-gen-pill {
-    left: 158px;
+    left: 14px;
     right: 14px;
     width: auto;
     max-width: none;
     transform: none;
-    top: calc(14px + env(safe-area-inset-top, 0px));
+    top: calc(72px + env(safe-area-inset-top, 0px));
     overflow: hidden;
     background: var(--pm-panel-solid);
     backdrop-filter: none;

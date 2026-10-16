@@ -4,16 +4,16 @@ import { testConnection as requestModels } from "../api/client";
 import { t } from "../i18n";
 import { useSettings } from "../store/settings";
 import { closeSettings } from "../store/workspace/actions";
+import type { ApiProfilesDraft } from "../lib/api-profiles";
 
 /** 保存设置（有 apiKey 即视为已引导，启动弹窗由它决定） */
 export function saveSettings(
-  baseUrl: string,
-  apiKey: string,
+  draft: ApiProfilesDraft,
   videoApiKey: string,
+  streamEnabled: boolean,
 ) {
   const settings = useSettings.getState();
-  settings.setApi(baseUrl, apiKey);
-  settings.setVideoApiKey(videoApiKey);
+  if (!settings.saveApiProfiles(draft, videoApiKey, streamEnabled)) return;
   closeSettings();
   toast(t("toast.settingsSaved"));
 }

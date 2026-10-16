@@ -8,6 +8,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent,
@@ -16,6 +17,7 @@ import {
   ArrowRight,
   Check,
   Circle,
+  Download,
   Eraser,
   Loader2,
   Minus,
@@ -28,6 +30,8 @@ import {
   Type,
   Undo2,
   X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { sketchMeta } from "../i18n/labels";
 import type {
@@ -39,27 +43,35 @@ import type {
   SketchShape,
   SketchShapeKind,
   SketchStroke,
+  SketchText,
+  SketchTextTransform,
 } from "../lib/types";
 import {
   SHAPE_KINDS,
   SKETCH_MAX_COMMANDS,
   SKETCH_MAX_POINTS,
   SKETCH_PALETTE,
+  SKETCH_TEXT_MAX_CHARS,
   clampToCanvas,
   constrainShapeEnd,
   eraserWidth,
+  isValidSketchText,
   makeShape,
   makeStroke,
   penWidth,
   shapeFitsMinSize,
   toLogicalPoint,
   totalPoints,
+  textSize,
+  transformSketchText,
+  resizeSketchText,
 } from "../lib/sketch";
 import {
   drawSketchCommand,
   drawSketchShape,
   replaySketch,
   sketchHasInk,
+  measureSketchTexts,
 } from "../lib/sketch-canvas";
 import {
   FIT_SKETCH_VIEW,
@@ -67,7 +79,7 @@ import {
   type SketchViewport,
 } from "../lib/sketch-viewport";
 
-type SketchTool = "pen" | "eraser" | "shape";
+type SketchTool = "pen" | "eraser" | "shape" | "text";
 
 interface PaperBox {
   left: number;
@@ -100,6 +112,7 @@ export function SketchModal(props: {
   onUndo: () => void;
   onRedo: () => void;
   onConfirm: () => void;
+  onSave: () => void;
   /** 关闭请求（是否有未确认修改由接线层判断并拦截） */
   onRequestClose: () => void;
   onLimit: (kind: "commands" | "points") => void;
@@ -112,6 +125,8 @@ export function SketchModal(props: {
   const ghostRef = useRef<HTMLDivElement>(null);
   const penBtnRef = useRef<HTMLButtonElement>(null);
   const shapeBtnRef = useRef<HTMLButtonElement>(null);
+  const textBtnRef = useRef<HTMLButtonElement>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
   const customColorRef = useRef<HTMLInputElement>(null);
   const drawingRef = useRef<{
     pid: number;
@@ -126,6 +141,14 @@ export function SketchModal(props: {
     cmd: SketchShape;
   } | null>(null);
   const shapeFrameRef = useRef(0);
+  const textDragRef = useRef<{
+    pid: number;
+    from: SketchPoint;
+    text: SketchText;
+    mode: "move" | "resize";
+    target: number;
+    next: SketchTextTransform | null;
+  } | null>(null);
   const ptsWarnedRef = useRef(false);
   const touchesRef = useRef(new Map<number, SketchPoint>());
   // 双指手势结束后，剩下的一指不接着画，直到全部抬起后重新落指。
@@ -144,6 +167,17 @@ export function SketchModal(props: {
   const [colorIdx, setColorIdx] = useState(0);
   const [colorHex, setColorHex] = useState<string>(SKETCH_PALETTE[0].hex);
   const [sizeT, setSizeT] = useState(0.35);
+  const [textDraft, setTextDraft] = useState<
+    (SketchPoint & { content: string }) | null
+  >(null);
+  const [selectedText, setSelectedText] = useState<number | null>(null);
+  const [textTransform, setTextTransform] =
+    useState<SketchTextTransform | null>(null);
+  const textItems = useMemo(
+    () => measureSketchTexts(doc, cursor, textTransform),
+    [doc, cursor, textTransform],
+  );
+  const selectedItem = textItems.find((item) => item.index === selectedText);
   const [box, setBox] = useState<PaperBox | null>(null);
   const [hasInk, setHasInk] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -161,6 +195,9 @@ export function SketchModal(props: {
       navigatingRef.current = false;
       drawingRef.current = null;
       shapeRef.current = null;
+      textDragRef.current = null;
+      setTextTransform(null);
+      // 文字锚点保留在逻辑坐标中；软键盘改变视口时继续输入，浮层随 box 重定位。
       cancelAnimationFrame(shapeFrameRef.current);
       shapeFrameRef.current = 0;
       if (ghostRef.current) ghostRef.current.style.display = "none";
@@ -223,8 +260,8 @@ export function SketchModal(props: {
     const cv = canvasRef.current;
     const ctx = cv?.getContext("2d");
     if (!cv || !ctx) return;
-    replaySketch(ctx, doc, cursor, cv.width / doc.width);
-  }, [doc, cursor]);
+    replaySketch(ctx, doc, cursor, cv.width / doc.width, textTransform);
+  }, [doc, cursor, textTransform]);
 
   // 缩放时提高栅格精度，长边最多 4096px，避免移动端创建过大的 Canvas。
   const density = box
@@ -232,9 +269,135 @@ export function SketchModal(props: {
     : 1;
   const rasterWidth = box ? Math.round(box.width * density) : 0;
   const rasterHeight = box ? Math.round(box.height * density) : 0;
+  const textCommand = useMemo<SketchText | null>(
+    () =>
+      textDraft
+        ? {
+            type: "text",
+            ...textDraft,
+            color: colorHex,
+            fontSize: textSize(sizeT, doc),
+          }
+        : null,
+    [textDraft, colorHex, sizeT, doc],
+  );
+  const draftBounds = useMemo(
+    () =>
+      textCommand
+        ? measureSketchTexts({ ...doc, commands: [textCommand] }, 1)[0]
+        : null,
+    [textCommand, doc],
+  );
+  // 输入面板避开完整字形（文字坐标是基线）；上方不足时翻到下方。
+  const draftTop =
+    box && draftBounds
+      ? box.top +
+        view.y +
+        (draftBounds.top / doc.height) * box.height * view.scale
+      : 0;
+  const draftBottom =
+    box && draftBounds
+      ? draftTop + (draftBounds.height / doc.height) * box.height * view.scale
+      : 0;
+  const editorTop = draftTop - 116 - 12;
+  const validText = isValidSketchText(textCommand);
   useLayoutEffect(() => {
     replayToCanvas();
-  }, [box, rasterWidth, rasterHeight, replayToCanvas]);
+    const ctx = canvasRef.current?.getContext("2d");
+    if (ctx && textDraft) {
+      drawSketchCommand(
+        ctx,
+        {
+          type: "text",
+          ...textDraft,
+          color: colorHex,
+          fontSize: textSize(sizeT, doc),
+        },
+        doc,
+      );
+    }
+  }, [
+    box,
+    rasterWidth,
+    rasterHeight,
+    replayToCanvas,
+    textDraft,
+    colorHex,
+    sizeT,
+    doc,
+  ]);
+
+  // 输入框仅在新建文字锚点时接管焦点；选色、调字号不会强行抢回焦点。
+  useEffect(() => {
+    textInputRef.current?.focus();
+  }, [textDraft?.x, textDraft?.y]);
+
+  const dropText = useCallback(() => {
+    setTextDraft(null);
+  }, []);
+
+  const dropTransform = useCallback(() => {
+    textDragRef.current = null;
+    setTextTransform(null);
+  }, []);
+
+  const commitTransform = (
+    command: SketchTextTransform,
+    before: SketchText,
+  ) => {
+    if (
+      props.confirming ||
+      (command.x === before.x &&
+        command.y === before.y &&
+        command.fontSize === before.fontSize)
+    )
+      return;
+    if (doc.commands.length >= SKETCH_MAX_COMMANDS) {
+      props.onLimit("commands");
+      return;
+    }
+    props.onStroke(command);
+  };
+
+  const scaleSelectedText = (ratio: number) => {
+    if (!selectedItem) return;
+    const { text, index } = selectedItem;
+    commitTransform(
+      {
+        type: "text-transform",
+        target: index,
+        x: text.x,
+        y: text.y,
+        fontSize: resizeSketchText(text.fontSize, ratio, doc),
+      },
+      text,
+    );
+  };
+
+  const submitText = () => {
+    if (!textCommand || !validText || props.confirming) return false;
+    if (doc.commands.length >= SKETCH_MAX_COMMANDS) {
+      props.onLimit("commands");
+      return false;
+    }
+    props.onStroke(textCommand);
+    setSelectedText(cursor);
+    dropText();
+    return true;
+  };
+
+  const openText = (point: SketchPoint) => {
+    if (textDraft?.content.trim() && !submitText()) {
+      textInputRef.current?.focus();
+      return;
+    }
+    if (doc.commands.length + (validText ? 1 : 0) >= SKETCH_MAX_COMMANDS) {
+      props.onLimit("commands");
+      return;
+    }
+    setTextDraft({ ...clampToCanvas(point, doc), content: "" });
+    setSelectedText(null);
+  };
 
   useEffect(() => {
     // hasInk 由栅格结果派生，仅在重放后同步
@@ -354,8 +517,26 @@ export function SketchModal(props: {
   const dropLive = useCallback(() => {
     dropShape();
     dropStroke();
+    dropText();
+    dropTransform();
+    setSelectedText(null);
     hideGhost();
-  }, [dropShape, dropStroke, hideGhost]);
+  }, [dropShape, dropStroke, dropText, dropTransform, hideGhost]);
+
+  // 文字输入期间 Esc 取消草稿，焦点回到工具按钮；不关闭画板。
+  useEffect(() => {
+    if (!textDraft && selectedText === null) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.isComposing) return;
+      event.preventDefault();
+      dropText();
+      dropTransform();
+      setSelectedText(null);
+      textBtnRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [textDraft, selectedText, dropText, dropTransform]);
 
   const cancelInteraction = useCallback(() => {
     touchesRef.current.clear();
@@ -412,9 +593,9 @@ export function SketchModal(props: {
     if (next !== "shape") setShapePanel(false);
   };
 
-  /** 选色：形状模式保持形状，其余沿用切回画笔的既有行为 */
+  /** 选色：形状与文字保持当前工具，其他工具切回画笔。 */
   const selectPenTool = () => {
-    if (tool !== "shape") selectTool("pen");
+    if (tool !== "shape" && tool !== "text") selectTool("pen");
   };
 
   const onShapeDown = (e: React.PointerEvent, rect: DOMRect) => {
@@ -449,7 +630,9 @@ export function SketchModal(props: {
     e.preventDefault();
     const rect = paperRef.current?.getBoundingClientRect();
     if (!rect) return;
-    if (tool === "shape") {
+    if (tool === "text") {
+      openText(toLogicalPoint(e.clientX, e.clientY, rect, doc));
+    } else if (tool === "shape") {
       onShapeDown(e, rect);
     } else {
       const cmd = makeStroke(
@@ -465,6 +648,22 @@ export function SketchModal(props: {
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    const drag = textDragRef.current;
+    if (drag) {
+      if (e.pointerId !== drag.pid) return;
+      const rect = paperRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      drag.next = transformSketchText(
+        drag.text,
+        drag.target,
+        drag.mode,
+        drag.from,
+        toLogicalPoint(e.clientX, e.clientY, rect, doc),
+        doc,
+      );
+      setTextTransform(drag.next);
+      return;
+    }
     moveGhost(e.clientX, e.clientY);
     const s = shapeRef.current;
     if (s) {
@@ -494,6 +693,15 @@ export function SketchModal(props: {
   };
 
   const endDraw = (e: React.PointerEvent, discard: boolean) => {
+    const drag = textDragRef.current;
+    if (drag && drag.pid === e.pointerId) {
+      if (!discard) {
+        onPointerMove(e);
+        if (drag.next) commitTransform(drag.next, drag.text);
+      }
+      dropTransform();
+      return;
+    }
     const s = shapeRef.current;
     if (s && e.pointerId === s.pid) {
       if (!discard) {
@@ -554,6 +762,28 @@ export function SketchModal(props: {
       }
     }
     if (navigatingRef.current) return;
+    const target =
+      e.target instanceof Element
+        ? e.target.closest<HTMLButtonElement>("[data-sketch-text]")
+        : null;
+    if (tool === "text" && target) {
+      const item = textItems.find(
+        (item) => item.index === Number(target.dataset.sketchText),
+      );
+      const rect = paperRef.current?.getBoundingClientRect();
+      if (!item || !rect) return;
+      setSelectedText(item.index);
+      target.focus({ preventScroll: true });
+      textDragRef.current = {
+        pid: e.pointerId,
+        from: toLogicalPoint(e.clientX, e.clientY, rect, doc),
+        text: item.text,
+        target: item.index,
+        mode: target.dataset.resize ? "resize" : "move",
+        next: null,
+      };
+      return;
+    }
     if (e.target instanceof Node && paperRef.current?.contains(e.target))
       onPointerDown(e);
   };
@@ -593,7 +823,11 @@ export function SketchModal(props: {
   /* ── 大小滑杆：上大下小 ── */
   const knobY = 8 + (1 - sizeT) * SLIDER_TRACK;
   const curWidth =
-    tool === "eraser" ? eraserWidth(sizeT, doc) : penWidth(sizeT, doc);
+    tool === "text"
+      ? textSize(sizeT, doc)
+      : tool === "eraser"
+        ? eraserWidth(sizeT, doc)
+        : penWidth(sizeT, doc);
   const dotD = box
     ? Math.min(46, Math.max(4, (curWidth * box.width) / doc.width))
     : 8;
@@ -635,14 +869,28 @@ export function SketchModal(props: {
               >
                 <canvas
                   ref={canvasRef}
+                  tabIndex={tool === "text" ? 0 : undefined}
+                  aria-label={
+                    tool === "text" ? t("sketch.textCanvas") : undefined
+                  }
+                  onKeyDown={(e) => {
+                    if (
+                      tool === "text" &&
+                      !busy &&
+                      (e.key === "Enter" || e.key === " ")
+                    ) {
+                      e.preventDefault();
+                      openText({ x: doc.width / 2, y: doc.height / 2 });
+                    }
+                  }}
                   width={rasterWidth}
                   height={rasterHeight}
                   style={{ width: box.width, height: box.height }}
                 />
                 <p
                   className="pm-sk-hint"
-                  style={{ opacity: hasInk ? 0 : 1 }}
-                  aria-hidden={hasInk}
+                  style={{ opacity: hasInk || textDraft ? 0 : 1 }}
+                  aria-hidden={hasInk || !!textDraft}
                 >
                   {t("sketch.hint")}
                 </p>
@@ -653,7 +901,229 @@ export function SketchModal(props: {
                 />
               </div>
             )}
+            {box &&
+              tool === "text" &&
+              !textDraft &&
+              textItems.map((item) => {
+                const scale = (box.width / doc.width) * view.scale;
+                const width = Math.max(44, item.width * scale + 8);
+                const height = Math.max(44, item.height * scale + 8);
+                const left =
+                  box.left +
+                  view.x +
+                  (item.left + item.width / 2) * scale -
+                  width / 2;
+                const top =
+                  box.top +
+                  view.y +
+                  (item.top + item.height / 2) * scale -
+                  height / 2;
+                const selected = selectedText === item.index;
+                return (
+                  <div
+                    key={item.index}
+                    className="pm-sk-text-object"
+                    style={{ left, top, width, height }}
+                  >
+                    <button
+                      type="button"
+                      className={"pm-sk-text-target" + (selected ? " on" : "")}
+                      data-sketch-text={item.index}
+                      aria-label={t("sketch.textSelect", {
+                        text: item.text.content,
+                      })}
+                      aria-pressed={selected}
+                      aria-describedby={
+                        selected ? "pm-sk-text-help" : undefined
+                      }
+                      disabled={busy}
+                      onFocus={() => setSelectedText(item.index)}
+                      onKeyDown={(e) => {
+                        const delta = {
+                          ArrowLeft: [-1, 0],
+                          ArrowRight: [1, 0],
+                          ArrowUp: [0, -1],
+                          ArrowDown: [0, 1],
+                        }[e.key];
+                        if (delta) {
+                          e.preventDefault();
+                          const step = e.shiftKey ? 10 : 1;
+                          commitTransform(
+                            transformSketchText(
+                              item.text,
+                              item.index,
+                              "move",
+                              { x: 0, y: 0 },
+                              { x: delta[0] * step, y: delta[1] * step },
+                              doc,
+                            ),
+                            item.text,
+                          );
+                        }
+                        if (e.key === "+" || e.key === "=" || e.key === "-") {
+                          e.preventDefault();
+                          scaleSelectedText(e.key === "-" ? 1 / 1.2 : 1.2);
+                        }
+                      }}
+                    />
+                    {selected && (
+                      <button
+                        type="button"
+                        className="pm-sk-text-resize"
+                        data-sketch-text={item.index}
+                        data-resize="true"
+                        aria-label={t("sketch.textResize")}
+                        disabled={busy}
+                        onKeyDown={(e) => {
+                          if (
+                            [
+                              "ArrowUp",
+                              "ArrowRight",
+                              "ArrowDown",
+                              "ArrowLeft",
+                            ].includes(e.key)
+                          ) {
+                            e.preventDefault();
+                            scaleSelectedText(
+                              e.key === "ArrowUp" || e.key === "ArrowRight"
+                                ? 1.2
+                                : 1 / 1.2,
+                            );
+                          }
+                        }}
+                      >
+                        <Scan size={15} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
           </div>
+
+          {tool === "text" && selectedItem && !textDraft && (
+            <div
+              className="pm-sk-text-options"
+              role="group"
+              aria-label={t("sketch.textTransform")}
+            >
+              <p id="pm-sk-text-help">{t("sketch.textTransformHint")}</p>
+              <button
+                type="button"
+                aria-label={t("sketch.textSmaller")}
+                disabled={
+                  busy || !!textTransform || selectedItem.text.fontSize <= 12
+                }
+                onClick={() => scaleSelectedText(1 / 1.2)}
+              >
+                <ZoomOut size={19} />
+              </button>
+              <button
+                type="button"
+                aria-label={t("sketch.textLarger")}
+                disabled={
+                  busy ||
+                  !!textTransform ||
+                  selectedItem.text.fontSize >= Math.min(doc.width, doc.height)
+                }
+                onClick={() => scaleSelectedText(1.2)}
+              >
+                <ZoomIn size={19} />
+              </button>
+              <button
+                type="button"
+                aria-label={t("sketch.textDeselect")}
+                disabled={busy}
+                onClick={() => {
+                  // 先把焦点移到常驻控件，避免移动端在浮层移除后恢复到文字并重新选中。
+                  textBtnRef.current?.focus({ preventScroll: true });
+                  setSelectedText(null);
+                }}
+              >
+                <Check size={19} />
+              </button>
+            </div>
+          )}
+
+          {textDraft && box && (
+            <div
+              className="pm-sk-text-editor"
+              role="group"
+              aria-label={t("sketch.textEditor")}
+              style={{
+                left: `clamp(8px, ${box.left + view.x + (textDraft.x / doc.width) * box.width * view.scale - 200}px, max(8px, calc(100% - 408px)))`,
+                top: `clamp(8px, ${editorTop >= 8 ? editorTop : draftBottom + 12}px, max(8px, calc(100% - 124px)))`,
+              }}
+            >
+              <input
+                ref={textInputRef}
+                type="text"
+                aria-label={t("sketch.textInput")}
+                aria-invalid={textDraft.content.length > SKETCH_TEXT_MAX_CHARS}
+                aria-describedby="pm-sk-text-count"
+                placeholder={t("sketch.textPlaceholder")}
+                value={textDraft.content}
+                disabled={busy}
+                style={{
+                  color: colorHex,
+                  // iOS 会自动放大字号小于 16px 的聚焦输入框；输入字号不影响画布字号。
+                  fontSize: Math.max(
+                    16,
+                    Math.min(
+                      40,
+                      ((textSize(sizeT, doc) * box.width) / doc.width) *
+                        view.scale,
+                    ),
+                  ),
+                }}
+                onChange={(e) =>
+                  setTextDraft({ ...textDraft, content: e.target.value })
+                }
+                onKeyDown={(e) => {
+                  if (
+                    e.key === "Enter" &&
+                    !e.nativeEvent.isComposing &&
+                    e.keyCode !== 229
+                  ) {
+                    e.preventDefault();
+                    if (submitText() || !textDraft.content.trim()) {
+                      dropText();
+                      paperRef.current?.querySelector("canvas")?.focus();
+                    }
+                  }
+                }}
+              />
+              <div className="pm-sk-text-actions">
+                <span id="pm-sk-text-count" aria-live="polite">
+                  {t("sketch.textCount", {
+                    length: textDraft.content.length,
+                    max: SKETCH_TEXT_MAX_CHARS,
+                  })}
+                </span>
+                <button
+                  type="button"
+                  aria-label={t("sketch.textCancel")}
+                  disabled={busy}
+                  onClick={() => {
+                    dropText();
+                    textBtnRef.current?.focus();
+                  }}
+                >
+                  <X size={18} />
+                </button>
+                <button
+                  type="button"
+                  aria-label={t("sketch.textConfirm")}
+                  disabled={!validText || busy}
+                  onClick={() => {
+                    if (submitText())
+                      paperRef.current?.querySelector("canvas")?.focus();
+                  }}
+                >
+                  <Check size={18} />
+                </button>
+              </div>
+            </div>
+          )}
 
           <button
             type="button"
@@ -703,10 +1173,13 @@ export function SketchModal(props: {
             </button>
             <button
               type="button"
-              className="pm-sk-tool"
-              aria-label={t("sketch.textDisabled")}
-              title={t("sketch.textTitle")}
-              disabled
+              ref={textBtnRef}
+              className={"pm-sk-tool" + (tool === "text" ? " on" : "")}
+              aria-label={t("sketch.text")}
+              title={t("sketch.text")}
+              aria-pressed={tool === "text"}
+              disabled={busy}
+              onClick={() => selectTool("text")}
             >
               <Type size={19} />
             </button>
@@ -837,7 +1310,9 @@ export function SketchModal(props: {
               <input
                 className="pm-sk-size-input"
                 type="range"
-                aria-label={t("sketch.size")}
+                aria-label={t(
+                  tool === "text" ? "sketch.textSize" : "sketch.size",
+                )}
                 min={0}
                 max={1}
                 step={0.01}
@@ -853,7 +1328,12 @@ export function SketchModal(props: {
             </div>
             <i
               className="pm-sk-size-dot"
-              style={{ width: dotD, height: dotD, top: knobY }}
+              style={{
+                width: dotD,
+                height: dotD,
+                top: knobY,
+                background: tool === "text" ? colorHex : undefined,
+              }}
               aria-hidden
             />
           </div>
@@ -937,6 +1417,20 @@ export function SketchModal(props: {
 
           <button
             type="button"
+            className="pm-sk-save"
+            aria-label={t("sketch.saveImage")}
+            title={t("sketch.saveImage")}
+            disabled={!hasInk || busy || !!textDraft}
+            onClick={() => {
+              dropLive();
+              props.onSave();
+            }}
+          >
+            <Download size={21} />
+          </button>
+
+          <button
+            type="button"
             className={
               "pm-sk-use" +
               (hasInk && !busy ? " ready" : "") +
@@ -944,7 +1438,7 @@ export function SketchModal(props: {
             }
             aria-label={busy ? t("sketch.preparing") : t("sketch.use")}
             title={busy ? t("sketch.preparingTitle") : t("sketch.use")}
-            disabled={!hasInk || busy}
+            disabled={!hasInk || busy || !!textDraft}
             onClick={() => {
               dropLive();
               props.onConfirm();

@@ -85,10 +85,10 @@ describe("nav 与 confirm", () => {
 });
 
 describe("history", () => {
-  it("首次回推选中最近一条；未加载时 selectRows 返回同一个空数组", () => {
+  it("首次回推保持新建页面；未加载时 selectRows 返回同一个空数组", () => {
     expect(selectRows(state())).toBe(selectRows(state()));
     rowsLoaded(rows("b", "a"));
-    expect(state().nav.selectedId).toBe("b");
+    expect(state().nav.selectedId).toBeNull();
     expect(selectRows(state()).map((r) => r.id)).toEqual(["b", "a"]);
   });
 
