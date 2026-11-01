@@ -1,14 +1,19 @@
 /** 首页画廊：把 store 里的历史列表、刚保存的结果与生成进度投影成展示组件；点一项只切换查看记录，保留草稿与后台任务。
- *  列表还没加载完、或一条都没有且不在生成时整体不渲染，舞台继续显示空状态引导。
+ *  页面上什么都没有时整体不渲染，舞台继续显示空状态引导。
+ *  创作条里传了输入图、失败的任务卡都留在画廊里，不换成舞台上的空状态引导。
  *  副作用：各任务的渐进预览 Blob → Object URL（useBlobUrls，卸载或换图即回收） */
 import { useMemo } from "react";
 import { Gallery, type GalleryTask } from "../components/Gallery";
-import { cancelGenerate } from "../flows/generate";
+import { cancelGenerate, retryTask } from "../flows/generate";
 import { selectHistory } from "../flows/navigation";
 import { useBlobUrls } from "../hooks/useBlobUrls";
 import type { WorkspaceAssets } from "../hooks/useWorkspaceAssets";
 import { useWorkspace } from "../store/workspace";
-import { selectGallery, selectGenerating } from "../store/workspace/selectors";
+import { dismissFailed } from "../store/workspace/actions";
+import {
+  selectGallery,
+  selectGalleryHasContent,
+} from "../store/workspace/selectors";
 
 export function GalleryArea({ assets }: { assets: WorkspaceAssets }) {
   const gallery = useWorkspace(selectGallery);
@@ -24,7 +29,8 @@ export function GalleryArea({ assets }: { assets: WorkspaceAssets }) {
     [tasks],
   );
   const partialUrls = useBlobUrls(blobs);
-  const generating = useWorkspace(selectGenerating);
+  // 创作条里传了输入图也算有内容：画廊继续留着，不换成舞台上的空状态引导
+  const hasContent = useWorkspace(selectGalleryHasContent);
   const cards = useMemo<GalleryTask[]>(
     () =>
       tasks.flatMap((task, index) =>
@@ -35,8 +41,12 @@ export function GalleryArea({ assets }: { assets: WorkspaceAssets }) {
                 id: task.id,
                 prompt: task.prompt,
                 saving: task.run.phase === "saving",
-                slots: task.run.phase === "generating" ? task.run.slots : null,
+                slots:
+                  task.run.phase === "generating" || task.run.phase === "failed"
+                    ? task.run.slots
+                    : null,
                 partialUrl: partialUrls[index] ?? null,
+                failure: task.run.phase === "failed" ? task.run.failure : null,
               },
             ],
       ),
@@ -56,7 +66,10 @@ export function GalleryArea({ assets }: { assets: WorkspaceAssets }) {
       ? assets.recentUrls[imageId]
       : assets.thumbnailUrls[imageId];
 
-  if (!rows && !generating) return null;
+  // 画廊不该占着舞台时不渲染：它是整屏浮层，渲染出来会盖住结果页，工具条就点不到了
+  if (gallery === null) return null;
+  // 什么都没有时舞台继续显示空状态引导
+  if (!rows && !hasContent) return null;
 
   return (
     <Gallery
@@ -64,6 +77,8 @@ export function GalleryArea({ assets }: { assets: WorkspaceAssets }) {
       urlOf={urlOf}
       tasks={cards}
       onCancel={cancelGenerate}
+      onRetry={retryTask}
+      onDismiss={dismissFailed}
       onOpen={selectHistory}
     />
   );

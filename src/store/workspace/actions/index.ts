@@ -6,3 +6,4 @@ export * from "./drawing";
 export * from "./nav";
 export * from "./view";
 export * from "./video";
+export * from "./gif";

@@ -1,7 +1,15 @@
 /** 顶左浮岛：品牌 / 首页 / 主题切换 / 历史 / 视频 / 设置 */
 import { useTranslation } from "react-i18next";
 import { Button } from "@heroui/react";
-import { Clapperboard, House, Menu, Moon, Settings, Sun } from "lucide-react";
+import {
+  Clapperboard,
+  Film,
+  House,
+  Menu,
+  Moon,
+  Settings,
+  Sun,
+} from "lucide-react";
 import type { ResolvedTheme } from "../lib/theme";
 
 export function TopNav(props: {
@@ -14,6 +22,9 @@ export function TopNav(props: {
   videoOpen: boolean;
   canOpenVideo: boolean;
   onVideo: () => void;
+  gifOpen: boolean;
+  canOpenGif: boolean;
+  onGif: () => void;
 }) {
   const { t } = useTranslation();
   const dark = props.theme === "dark";
@@ -67,6 +78,17 @@ export function TopNav(props: {
         onPress={props.onVideo}
       >
         <Clapperboard size={15} />
+      </Button>
+      <Button
+        variant="ghost"
+        isIconOnly
+        size="sm"
+        aria-label={props.gifOpen ? t("nav.gifClose") : t("nav.gif")}
+        aria-pressed={props.gifOpen}
+        isDisabled={!props.canOpenGif && !props.gifOpen}
+        onPress={props.onGif}
+      >
+        <Film size={15} />
       </Button>
       <Button
         variant="ghost"

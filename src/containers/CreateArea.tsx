@@ -1,6 +1,6 @@
 /** 创作区：创作条与输入图预览；把草稿与资源投影成展示组件的 props，操作交给 flows。
  *  副作用：focusSeq 变化时聚焦描述框；创作条展开期间监听点击条外（收起规则见 selectShouldCollapseBar），
- *  回到 mini 即移除 */
+ *  回到 mini 即移除；监听页面粘贴，把剪贴板里的图片作为输入图（规则见 selectCanPasteImage） */
 import { useEffect, useMemo, useRef } from "react";
 import { CreateBar } from "../components/bar/CreateBar";
 import { InputPreview } from "../components/overlays/InputPreview";
@@ -11,7 +11,12 @@ import {
   openSketchNew,
   startInpaintFromInput,
 } from "../flows/drawing";
-import { addFiles, removeInput, removeMask } from "../flows/draft";
+import {
+  addClipboardImages,
+  addFiles,
+  removeInput,
+  removeMask,
+} from "../flows/draft";
 import { downloadAll } from "../flows/export";
 import { cancelGenerate, generate, regenerate } from "../flows/generate";
 import {
@@ -22,6 +27,11 @@ import {
 import { useCreateBarInset } from "../hooks/useCreateBarInset";
 import { useDraftImages } from "../hooks/useDraftImages";
 import type { WorkspaceAssets } from "../hooks/useWorkspaceAssets";
+import {
+  clipboardHasText,
+  clipboardImageFiles,
+  isEditableTarget,
+} from "../lib/clipboard";
 import { customOk } from "../lib/params";
 import { inpaintBarInfo } from "../lib/workspace-rules";
 import { useWorkspace } from "../store/workspace";
@@ -41,6 +51,7 @@ import {
   selectRunDone,
   selectRunTotal,
   selectShouldCollapseBar,
+  selectCanPasteImage,
 } from "../store/workspace/selectors";
 
 export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
@@ -113,6 +124,25 @@ export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
     document.addEventListener("pointerdown", onDown);
     return () => document.removeEventListener("pointerdown", onDown);
   }, [barMode]);
+
+  // 剪贴板图片：页面任意位置粘贴都作为输入图（能不能接收见 selectCanPasteImage）；
+  // 粘贴目标里有文字时让文字优先，不劫持正常的文本粘贴
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const files = clipboardImageFiles(event.clipboardData);
+      if (!files.length) return;
+      if (!selectCanPasteImage(useWorkspace.getState())) return;
+      if (
+        isEditableTarget(event.target) &&
+        clipboardHasText(event.clipboardData)
+      )
+        return;
+      event.preventDefault();
+      void addClipboardImages(files);
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, []);
 
   return (
     <>

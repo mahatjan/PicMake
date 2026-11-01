@@ -66,7 +66,8 @@ export function useWorkspaceAssets() {
       run.prepared.row.id === displayRow?.id,
   );
   const shown: PreparedGeneration | null =
-    shownTask && shownTask.run.phase !== "generating"
+    shownTask &&
+    (shownTask.run.phase === "saving" || shownTask.run.phase === "unsaved")
       ? shownTask.run.prepared
       : null;
   const memoryImages = useMemo(

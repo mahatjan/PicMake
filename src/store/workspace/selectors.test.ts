@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { HistoryRow, ImageRow } from "../../db/schema";
 import { blankSketch } from "../../lib/sketch";
+import type { GenParams } from "../../lib/types";
 import { initialWorkspace, useWorkspace } from "./index";
 import {
   beginRead,
@@ -10,6 +11,7 @@ import {
   closeDrawer,
   closeViewMask,
   endRun,
+  failRun,
   finishSave,
   markUnsaved,
   expandBar,
@@ -39,6 +41,16 @@ import {
 import type { PreparedGeneration } from "../../lib/generation";
 
 const state = () => useWorkspace.getState();
+
+const params: GenParams = {
+  model: "flare",
+  prompt: "猫",
+  size: "auto",
+  quality: "high",
+  n: 1,
+  background: "auto",
+  outputFormat: "png",
+};
 
 beforeEach(() => {
   useWorkspace.setState(initialWorkspace(), true);
@@ -92,7 +104,7 @@ describe("selectGallery", () => {
     expect(selectGallery(state())).toBe(state().history.rows);
   });
 
-  it("写描述、调参数都留在画廊；草稿有输入图、上传读取中才让位", () => {
+  it("写描述、调参数、传输入图都留在画廊，不换成舞台上的空状态引导", () => {
     rowsLoaded(rowsOf("a", "b"));
     patchForm({ prompt: "猫" });
     expect(selectGallery(state())).toBe(state().history.rows);
@@ -102,12 +114,13 @@ describe("selectGallery", () => {
 
     rowsLoaded(rowsOf("a", "b"));
     initializeDraft(undefined, [{ imageId: "x" }]);
-    expect(selectGallery(state())).toBeNull();
+    expect(selectGallery(state())).toBe(state().history.rows);
+    expect(selectGalleryVisible(state())).toBe(true);
     useWorkspace.setState(initialWorkspace(), true);
 
     rowsLoaded(rowsOf("a", "b"));
     beginRead("r1");
-    expect(selectGallery(state())).toBeNull();
+    expect(selectGallery(state())).toBe(state().history.rows);
   });
 });
 
@@ -149,6 +162,17 @@ describe("查看记录与后台任务隔离", () => {
     expect(selectGallery(state())).toBe("empty");
     expect(selectGalleryVisible(state())).toBe(true);
   });
+
+  it("失败的任务卡留在首页：不算忙碌，但画廊要占着舞台", () => {
+    rowsLoaded([]);
+    beginRun({ n: 1, size: "auto" });
+    failRun(state().tasks[0].id, "auth", { params, draft: null });
+    expect(selectBusy(state())).toBe(false);
+    expect(selectGallery(state())).toBe("empty");
+    expect(selectGalleryVisible(state())).toBe(true);
+    // 失败的任务不接管舞台：查看状态仍是空闲
+    expect(selectDisplayRun(state()).phase).toBe("idle");
+  });
 });
 
 describe("selectGalleryVisible / selectHomeScreen", () => {
@@ -159,6 +183,10 @@ describe("selectGalleryVisible / selectHomeScreen", () => {
     rowsLoaded([]);
     expect(selectGalleryVisible(state())).toBe(false);
     expect(selectHomeScreen(state())).toBe(true);
+    // 传了输入图：画廊占着舞台，空状态引导让位
+    initializeDraft(undefined, [{ imageId: "x" }]);
+    expect(selectGalleryVisible(state())).toBe(true);
+    useWorkspace.setState(initialWorkspace(), true);
     rowsLoaded([{ id: "a" } as HistoryRow]);
     expect(selectGalleryVisible(state())).toBe(true);
     expect(selectHomeScreen(state())).toBe(true);
@@ -172,7 +200,7 @@ describe("selectGalleryVisible / selectHomeScreen", () => {
     expect(selectGalleryVisible(state())).toBe(false);
   });
 
-  it("选中记录时既不是画廊也不是首页；写描述仍在首页，有输入图才离开", () => {
+  it("选中记录时既不是画廊也不是首页；写描述、传输入图都仍在首页", () => {
     rowsLoaded([{ id: "a" } as HistoryRow]);
     selectRecord("a");
     expect(selectGalleryVisible(state())).toBe(false);
@@ -182,9 +210,10 @@ describe("selectGalleryVisible / selectHomeScreen", () => {
     patchForm({ prompt: "猫" });
     expect(selectGalleryVisible(state())).toBe(true);
     expect(selectHomeScreen(state())).toBe(true);
+    // 传了输入图也不换页：还是画廊，不换成舞台上的空状态引导
     initializeDraft(undefined, [{ imageId: "x" }]);
-    expect(selectGalleryVisible(state())).toBe(false);
-    expect(selectHomeScreen(state())).toBe(false);
+    expect(selectGalleryVisible(state())).toBe(true);
+    expect(selectHomeScreen(state())).toBe(true);
   });
 
   it("刚保存完（没有选中、recent 有值）仍在首页，画廊展示新记录", () => {

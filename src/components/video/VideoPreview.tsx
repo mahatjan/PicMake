@@ -12,6 +12,7 @@ export function VideoPreview(props: {
   error: string | null;
   onClose: () => void;
   onDownload: () => void;
+  onToGif: () => void;
   onCopy: () => void;
   onReuse: () => void;
   onDelete: () => void;
@@ -70,6 +71,9 @@ export function VideoPreview(props: {
               onClick={props.onDownload}
             >
               {t("video.download")}
+            </button>
+            <button type="button" disabled={!props.url} onClick={props.onToGif}>
+              {t("video.toGif")}
             </button>
             <button type="button" onClick={props.onCopy}>
               {t("video.copy")}

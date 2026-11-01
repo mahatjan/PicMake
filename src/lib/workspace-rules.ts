@@ -70,6 +70,11 @@ export function canOpenPlayground(s: { drawing: boolean }): boolean {
   return !s.drawing;
 }
 
+/** GIF 工作台：与视频工作台互斥，画板打开时不进入 */
+export function canOpenGif(s: { drawing: boolean }): boolean {
+  return !s.drawing;
+}
+
 /** 画板打开以来是否有修改：撤销回打开时的状态视为没有修改。
  *  会序列化全部已提交命令，只在请求关闭画板时调用，不要放进 selector 或渲染路径 */
 export function isDrawingChanged(d: {
@@ -112,6 +117,18 @@ export function shouldCollapseBar(s: {
   canReturn: boolean;
 }): boolean {
   return !s.userWork && s.inputCount === 0 && !s.canReturn;
+}
+
+/** 创作条能不能接收剪贴板图片：被工作台或弹层盖住、正在读取上传、有确认框时都不接收 */
+export function canPasteInputImage(s: {
+  /** 视频 / GIF 工作台、画板、设置、历史抽屉盖住了创作条 */
+  covered: boolean;
+  /** 正在读取一批上传 */
+  reading: boolean;
+  /** 确认框打开 */
+  confirming: boolean;
+}): boolean {
+  return !s.covered && !s.reading && !s.confirming;
 }
 
 /** 舞台滚轮切换的目标记录：rows 按时间从新到旧；没有选中项时选最近一条；已在边界返回 null */

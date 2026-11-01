@@ -327,6 +327,78 @@
   flex: none;
   margin-left: 0;
 }
+/* 失败的任务卡：留在列表里等用户重试 */
+.pm-gal-card.is-failed {
+  box-shadow:
+    var(--pm-shadow-lg),
+    0 0 0 1px var(--pm-error-border);
+}
+.pm-gal-card.is-failed .pm-gal-thumb {
+  background: var(--pm-error-soft);
+}
+.pm-gal-fail {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  color: var(--pm-error);
+  text-align: center;
+}
+.pm-gal-fail span {
+  font-size: 11.5px;
+  color: var(--pm-text-3);
+  overflow-wrap: anywhere;
+}
+.pm-gal-acts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.pm-gal-retry {
+  height: 30px;
+  padding: 0 13px;
+  border-radius: 8px;
+  border: 1px solid var(--pm-line-2);
+  color: var(--pm-text-1);
+  font-size: 12px;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+.pm-gal-retry:hover {
+  border-color: var(--pm-accent-border);
+}
+.pm-gal-retry:focus-visible {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 2px;
+}
+.pm-gal-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--pm-line-2);
+  color: var(--pm-text-3);
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
+}
+.pm-gal-dismiss:hover {
+  color: var(--pm-text-1);
+  background: var(--pm-fill);
+}
+.pm-gal-dismiss:focus-visible {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 2px;
+}
 @media (max-width: 760px) {
   .pm-gal {
     --pm-gal-grid: repeat(auto-fill, minmax(150px, 1fr));

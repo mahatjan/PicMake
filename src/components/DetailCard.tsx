@@ -34,6 +34,8 @@ export function DetailCard(props: {
   onEdit: (imageId: string) => void;
   /** 把选中的一张设为图生视频参考图 */
   onToVideo: (imageId: string) => void;
+  /** 用选中的一张新建 GIF 项目 */
+  onToGif: (imageId: string) => void;
   /** 对选中的一张发起局部重绘 */
   onInpaint: (imageId: string) => void;
   onDelete: () => void;
@@ -188,6 +190,14 @@ export function DetailCard(props: {
         onClick={() => editImageId && props.onToVideo(editImageId)}
       >
         {t("detail.toVideo")}
+      </button>
+      <button
+        type="button"
+        className="pm-detail-video"
+        disabled={!editImageId || !props.canEdit}
+        onClick={() => editImageId && props.onToGif(editImageId)}
+      >
+        {t("detail.toGif")}
       </button>
       <div className="pm-detail-acts">
         {inpaintRow ? (

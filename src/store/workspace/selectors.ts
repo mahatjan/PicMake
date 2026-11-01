@@ -2,25 +2,39 @@
 import type { HistoryRow } from "../../db/schema";
 import type { PreparedGeneration } from "../../lib/generation";
 import {
+  canPasteInputImage,
   canWheelSwitch,
   hasUserWork,
   shouldCollapseBar,
 } from "../../lib/workspace-rules";
-import type { Run, WorkspaceState } from "./index";
+import type { GenerationTask, Run, WorkspaceState } from "./index";
 
 const EMPTY_ROWS: HistoryRow[] = [];
 const IDLE_RUN: Run = { phase: "idle" };
 
+/** 在跑的任务阶段：失败的任务不在其中（它留在列表里等用户重试，不占着全局状态） */
+type ActiveRun = Exclude<Run, { phase: "failed" }>;
+
+const isActive = (
+  task: GenerationTask,
+): task is GenerationTask & { run: ActiveRun } =>
+  task.run.phase === "generating" ||
+  task.run.phase === "saving" ||
+  task.run.phase === "unsaved";
+
 /** 全局任务状态：用于创作条、取消与离开页面提示，不代表当前查看的记录。 */
-export const selectRun = (s: WorkspaceState): Run =>
-  s.tasks.find((task) => task.run.phase === "generating")?.run ??
-  s.tasks.find((task) => task.run.phase === "saving")?.run ??
-  s.tasks.find((task) => task.run.phase === "unsaved")?.run ??
-  IDLE_RUN;
+export const selectRun = (s: WorkspaceState): ActiveRun =>
+  s.tasks.find(isActive)?.run ?? IDLE_RUN;
 
 export const selectActiveCount = (s: WorkspaceState) =>
-  s.tasks.filter((task) => task.run.phase !== "unsaved").length;
+  s.tasks.filter(
+    (task) => task.run.phase === "generating" || task.run.phase === "saving",
+  ).length;
 export const selectBusy = (s: WorkspaceState) => selectActiveCount(s) > 0;
+
+/** 失败的任务：留在列表里等用户重试或手动移除；不算忙碌 */
+export const selectHasFailed = (s: WorkspaceState) =>
+  s.tasks.some((task) => task.run.phase === "failed");
 
 /** 历史列表；尚未加载时为固定的空数组 */
 export const selectRows = (s: WorkspaceState) => s.history.rows ?? EMPTY_ROWS;
@@ -81,7 +95,7 @@ export const selectDisplayRow = (s: WorkspaceState): HistoryRow | null => {
 };
 
 /** 查看历史作品时，后台生成、保存和保存失败都不接管舞台。 */
-export const selectDisplayRun = (s: WorkspaceState): Run =>
+export const selectDisplayRun = (s: WorkspaceState): ActiveRun =>
   s.nav.selectedId && findRow(s, s.nav.selectedId) ? IDLE_RUN : selectRun(s);
 
 /** 当前选中的图片：单张取那张，多张取轮播所在的那张 */
@@ -112,15 +126,27 @@ export type GalleryState = "loading" | "empty" | HistoryRow[];
  *  此时必须留在画廊（新记录置顶），而不是停在详情页 */
 const selectGalleryShow = (s: WorkspaceState): boolean => {
   if (s.nav.selectedId && selectDisplayRow(s)) return false;
-  if (s.view.playgroundOpen) return false;
+  if (s.view.playgroundOpen || s.view.gifOpen) return false;
   // 后台生成与保存都显示任务卡，不会把首页切走。
   if (selectBusy(s)) return true;
   // 保存失败：结果在内存里，仍停在结果页
   if (selectRun(s).phase !== "idle") return false;
-  // 写描述、调参数都还停在首页：创作条就在画廊下方，输入时不该把画廊换成空状态引导。
-  // 上了输入图（或正在读取）才算"在编辑一张图"，让位给结果区
-  return s.draft.inputs.length === 0 && s.draft.readId === null;
+  // 失败的任务卡留在首页，用户要能重试或移除它。
+  if (selectHasFailed(s)) return true;
+  // 写描述、调参数、传输入图都还停在首页：创作条就在画廊下方，
+  // 传了图也不该把画廊换成舞台上的空状态引导。
+  return true;
 };
+
+/** 画廊上有没有东西可显示：历史记录、刚保存的结果、任务卡，或创作条里已经放了输入图。
+ *  什么都没有时舞台继续显示空状态引导 */
+export const selectGalleryHasContent = (s: WorkspaceState): boolean =>
+  (s.history.rows?.length ?? 0) > 0 ||
+  s.history.recent !== null ||
+  selectBusy(s) ||
+  selectHasFailed(s) ||
+  s.draft.inputs.length > 0 ||
+  s.draft.readId !== null;
 
 export const selectGallery = (s: WorkspaceState): GalleryState | null => {
   if (!selectGalleryShow(s)) return null;
@@ -130,10 +156,10 @@ export const selectGallery = (s: WorkspaceState): GalleryState | null => {
 };
 
 /** 首页画廊是否占着舞台：空状态引导必须让位，否则会叠在画廊上。
- *  三种情况为真：有记录、正在生成（生成卡要显示，即使还没有任何记录）、列表已加载。
- *  列表已加载但为空、且没有生成 → 仍是空状态引导（否则首页会什么都没有） */
+ *  有记录、正在生成（生成卡要显示，即使还没有任何记录）、失败的任务卡、创作条里放了输入图时都算。
+ *  列表已加载但为空、也没在生成、也没传图 → 仍是空状态引导（否则首页会什么都没有） */
 export const selectGalleryVisible = (s: WorkspaceState): boolean =>
-  selectGalleryShow(s) && (selectBusy(s) || (s.history.rows?.length ?? 0) > 0);
+  selectGalleryShow(s) && selectGalleryHasContent(s);
 
 /** 舞台上是不是首页（画廊，或列表还在加载/为空的空状态引导）。
  *  滚轮规则用它：首页要能滚动，不能让舞台的滚轮监听抢走事件 */
@@ -154,6 +180,7 @@ export const selectCanWheelSwitch = (s: WorkspaceState) =>
       s.view.settingsOpen ||
       s.view.drawerOpen ||
       s.view.playgroundOpen ||
+      s.view.gifOpen ||
       s.view.lightboxId !== null ||
       s.view.viewMask !== null ||
       s.view.focusIdx !== null,
@@ -168,4 +195,22 @@ export const selectShouldCollapseBar = (s: WorkspaceState) =>
     userWork: selectHasUserWork(s),
     inputCount: s.draft.inputs.length,
     canReturn: selectCanReturn(s),
+  });
+
+/** 创作条被盖住：视频 / GIF 工作台、画板、设置、历史抽屉、灯箱与选区查看打开时，粘贴交给各自的界面 */
+const selectBarCovered = (s: WorkspaceState) =>
+  s.view.playgroundOpen ||
+  s.view.gifOpen ||
+  s.view.settingsOpen ||
+  s.view.drawerOpen ||
+  s.view.lightboxId !== null ||
+  s.view.viewMask !== null ||
+  s.drawing !== null;
+
+/** 创作条能否接收剪贴板图片：规则见 canPasteInputImage */
+export const selectCanPasteImage = (s: WorkspaceState) =>
+  canPasteInputImage({
+    covered: selectBarCovered(s),
+    reading: s.draft.readId !== null,
+    confirming: s.confirm !== null,
   });

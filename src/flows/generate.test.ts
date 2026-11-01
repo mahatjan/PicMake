@@ -26,7 +26,7 @@ import {
   rowsLoaded,
 } from "../store/workspace/actions";
 import { selectRun, selectRunDone } from "../store/workspace/selectors";
-import { cancelGenerate, generate, regenerate } from "./generate";
+import { cancelGenerate, generate, regenerate, retryTask } from "./generate";
 
 const state = () => useWorkspace.getState();
 const plan = { n: 1, size: "auto" } as const;
@@ -350,7 +350,7 @@ describe("多尺寸生成", () => {
     );
   });
 
-  it("全部失败：不入库，只弹一条第一个失败的错误提示，草稿保留", async () => {
+  it("全部失败：不入库，只弹一条第一个失败的错误提示，任务卡留在列表里，草稿保留", async () => {
     const first = new ApiError("auth", "", 401);
     vi.mocked(requestImages)
       .mockRejectedValueOnce(first)
@@ -364,6 +364,9 @@ describe("多尺寸生成", () => {
     expect(toast).toHaveBeenCalledWith(errorMessage(first, t));
     expect(state().draft.form).toMatchObject({ prompt: "", multi: true });
     expect(state().nav.lastDoneId).toBeNull();
+    // 失败的任务卡留在列表里，等用户重试或移除
+    expect(state().tasks).toHaveLength(1);
+    expect(state().tasks[0].run.phase).toBe("failed");
   });
 
   it("取消：中止未完成的请求，已完成的照常保存", async () => {
@@ -552,10 +555,34 @@ describe("parallel generation", () => {
     patchForm({ prompt: "second" });
     generate();
     pending[0].reject(new ApiError("server", "", 500));
-    await vi.waitFor(() => expect(state().tasks).toHaveLength(1));
+    // 失败的任务卡留在列表里，另一个任务照跑
+    await vi.waitFor(() => expect(state().tasks).toHaveLength(2));
+    expect(state().tasks.map((task) => task.run.phase)).toEqual([
+      "generating",
+      "failed",
+    ]);
     expect(state().tasks[0].prompt).toBe("second");
     pending[1].resolve();
-    await vi.waitFor(() => expect(state().tasks).toHaveLength(0));
+    await vi.waitFor(() => expect(state().tasks).toHaveLength(1));
+    expect(state().tasks[0].run.phase).toBe("failed");
+    expect(saveGeneration).toHaveBeenCalledTimes(1);
+  });
+
+  it("重试失败的任务：按原来的参数再发一次，失败卡换成新的生成卡", async () => {
+    vi.mocked(requestImages)
+      .mockRejectedValueOnce(new ApiError("auth", "", 401))
+      .mockImplementation(async (p) => ok(p));
+    patchForm({ prompt: "猫" });
+    generate();
+    await vi.waitFor(() => expect(state().tasks[0].run.phase).toBe("failed"));
+    const failedId = state().tasks[0].id;
+
+    retryTask(failedId);
+    expect(state().tasks).toHaveLength(1);
+    expect(state().tasks[0].id).not.toBe(failedId);
+    expect(state().tasks[0].run.phase).toBe("generating");
+    expect(vi.mocked(requestImages).mock.calls[1][0].prompt).toBe("猫");
+    await finished();
     expect(saveGeneration).toHaveBeenCalledTimes(1);
   });
 

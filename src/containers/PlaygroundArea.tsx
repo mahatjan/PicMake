@@ -6,6 +6,7 @@ import { Playground } from "../components/video/Playground";
 import { VideoPreview } from "../components/video/VideoPreview";
 import { VideoSheet } from "../components/video/VideoSheet";
 import { copyPrompt } from "../flows/export";
+import { openGifFromVideoRecord } from "../flows/gif";
 import {
   addVideoFiles,
   confirmClearVideos,
@@ -219,6 +220,7 @@ export function PlaygroundArea() {
           error={failText(preview.error, preview.failCode)}
           onClose={closeVideoPreview}
           onDownload={() => downloadVideo(preview.id)}
+          onToGif={() => void openGifFromVideoRecord(preview.id)}
           onCopy={() => copyPrompt(preview.prompt)}
           onReuse={() => reuseVideo(preview.id)}
           onDelete={() => deleteVideo(preview.id)}

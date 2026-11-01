@@ -38,6 +38,7 @@ export const openPlayground = () =>
     view: {
       ...s.view,
       playgroundOpen: true,
+      gifOpen: false,
       lightboxId: null,
       focusIdx: null,
       previewId: null,

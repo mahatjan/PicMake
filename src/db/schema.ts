@@ -8,6 +8,7 @@ import type {
   InpaintHistory,
 } from "../lib/types";
 import type { VideoRecord } from "../lib/video";
+import type { GifProject } from "../lib/gif/types";
 
 export interface ImageRow {
   id: string;
@@ -43,11 +44,15 @@ export interface HistoryRow {
 }
 
 export type VideoRow = VideoRecord;
+export type GifAssetRow = import("./gif").GifAssetRow;
+export type GifProjectRow = GifProject;
 
 export const db = new Dexie("PicMake") as Dexie & {
   images: EntityTable<ImageRow, "id">;
   history: EntityTable<HistoryRow, "id">;
   videos: EntityTable<VideoRow, "id">;
+  gifProjects: EntityTable<GifProjectRow, "id">;
+  gifAssets: EntityTable<GifAssetRow, "id">;
 };
 
 db.version(1).stores({
@@ -59,6 +64,15 @@ db.version(2).stores({
   images: "id",
   history: "id, createdAt",
   videos: "id, createdAt, status",
+});
+
+/** GIF 工作台：项目与素材分表，避免编辑图层时重写大视频 Blob */
+db.version(3).stores({
+  images: "id",
+  history: "id, createdAt",
+  videos: "id, createdAt, status",
+  gifProjects: "id, updatedAt, createdAt",
+  gifAssets: "id, projectId",
 });
 
 /** 启动时申请持久化存储，降低浏览器自动清理 IndexedDB 的风险 */

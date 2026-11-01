@@ -215,6 +215,7 @@ function FullBar(props: FullBarProps) {
               <span className="ds">
                 {t("bar.uploadDesc", { max: MAX_INPUT_IMAGES })}
               </span>
+              <span className="ds">{t("bar.uploadPaste")}</span>
             </span>
           </button>
           <button

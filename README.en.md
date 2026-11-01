@@ -43,7 +43,7 @@ Requests stream over SSE (`partial_images: 3`): a blurry preview appears on the 
 ### Sketches, reference images and inpainting
 
 - **Sketch**: rough out the composition, outlines and color blocks on a blank canvas, then use it as an input image; reopen it any time to keep drawing
-- **Reference images**: upload PNG / JPEG / WebP or reuse earlier results, up to 16 inputs including sketches; refer to them as "Image 1", "Image 2" in your prompt
+- **Reference images**: upload PNG / JPEG / WebP, paste an image straight from the clipboard (Ctrl / Cmd + V) or reuse earlier results, up to 16 inputs including sketches; refer to them as "Image 1", "Image 2" in your prompt
 - **Inpainting**: paint over the area you want to change, then describe the change. The selection is saved with the result, so you can review it, adjust it and run it again (the selection guides the edit; areas outside it may change too)
 
 | Sketch board                                | Inpainting                                 |

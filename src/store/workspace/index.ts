@@ -3,8 +3,10 @@ import { create } from "zustand";
 import type { HistoryRow, ImageRow } from "../../db/schema";
 import type { PreparedGeneration } from "../../lib/generation";
 import { DEFAULT_FORM, type GenForm } from "../../lib/params";
+import type { GifAsset, GifIssue, GifProject } from "../../lib/gif/types";
 import type {
   ApiErrorKind,
+  EditDraft,
   FidelityChoice,
   GenParams,
   InpaintDraft,
@@ -52,7 +54,14 @@ export interface RunSlot {
   failure: ApiErrorKind | null;
 }
 
+/** 失败任务重发用的快照：请求参数与输入源（编辑类生成）；普通生成为 null 输入源 */
+export interface RetryRequest {
+  params: GenParams;
+  draft: EditDraft | null;
+}
+
 /** 生成生命周期；saving = 请求成功、正在写库，unsaved = 保存失败、结果留在内存（可查看、下载）。
+ *  failed = 请求失败、任务留在列表里等用户重试。
  *  多尺寸时 slots 是每个比例的请求，partial 不用；单尺寸时 slots 为 null */
 export type Run =
   | { phase: "idle" }
@@ -63,7 +72,17 @@ export type Run =
       slots: RunSlot[] | null;
     }
   | { phase: "saving"; prepared: PreparedGeneration }
-  | { phase: "unsaved"; prepared: PreparedGeneration };
+  | { phase: "unsaved"; prepared: PreparedGeneration }
+  | {
+      phase: "failed";
+      /** 失败原因：卡片上显示它的标题 */
+      failure: ApiErrorKind;
+      plan: GenPlan;
+      /** 多尺寸时各比例的结局（失败的保留下来供用户重试） */
+      slots: RunSlot[] | null;
+      /** 重发用的请求快照 */
+      retry: RetryRequest;
+    };
 
 /** 画板：草图与局部重绘共用一个槽位，互斥由类型保证；opening = 局部重绘底图准备中。
  *  id 在打开时生成，异步结果回来后与当前 id 比对，不一致就丢弃 */
@@ -137,6 +156,39 @@ export interface VideoDraft {
   frames: { first: VideoImageDraft | null; last: VideoImageDraft | null };
 }
 
+/** GIF 导入任务：只记录进度与问题码，不存 Object URL */
+export interface GifImportJob {
+  id: string;
+  status: "reading" | "error";
+  name: string;
+  progress: number;
+  error: GifIssue | null;
+}
+
+/** GIF 导出任务：进度用于面板；结果素材 id 写在项目上 */
+export interface GifExportJob {
+  id: string;
+  status: "running" | "error";
+  progress: number;
+  total: number;
+  error: GifIssue | null;
+}
+
+export interface GifState {
+  /** 首页项目列表；null = 尚未加载 */
+  rows: GifProject[] | null;
+  /** 当前编辑器项目；null = 首页 */
+  project: GifProject | null;
+  /** 项目引用的素材 Blob；Object URL 在 hooks 中创建 */
+  assets: Record<string, GifAsset>;
+  importJob: GifImportJob | null;
+  exportJob: GifExportJob | null;
+  saving: boolean;
+  dirty: boolean;
+  /** 项目文档快照，不含 Blob */
+  history: { past: GifProject[]; future: GifProject[] };
+}
+
 export interface WorkspaceState {
   history: {
     /** 只由 liveQuery 订阅（flows/history-sync）写入；null 表示尚未加载 */
@@ -182,6 +234,8 @@ export interface WorkspaceState {
     settingsOpen: boolean;
     /** 视频工作台盖住舞台和创作条 */
     playgroundOpen: boolean;
+    /** GIF 工作台盖住舞台和创作条 */
+    gifOpen: boolean;
     viewMask: ViewMask | null;
   };
   /** 视频工作台：记录由 liveQuery 回推；草稿与提交锁只在会话内 */
@@ -191,6 +245,7 @@ export interface WorkspaceState {
     previewId: string | null;
     draft: VideoDraft;
   };
+  gif: GifState;
   confirm: ConfirmState | null;
 }
 
@@ -223,6 +278,7 @@ export const initialWorkspace = (): WorkspaceState => {
       drawerOpen: false,
       settingsOpen: false,
       playgroundOpen: false,
+      gifOpen: false,
       viewMask: null,
     },
     video: {
@@ -244,6 +300,16 @@ export const initialWorkspace = (): WorkspaceState => {
         refs: [],
         frames: { first: null, last: null },
       },
+    },
+    gif: {
+      rows: null,
+      project: null,
+      assets: {},
+      importJob: null,
+      exportJob: null,
+      saving: false,
+      dirty: false,
+      history: { past: [], future: [] },
     },
     confirm: null,
   };

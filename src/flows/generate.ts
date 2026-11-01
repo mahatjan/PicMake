@@ -37,7 +37,9 @@ import {
   beginRun,
   beginSave,
   discardUnsaved,
+  dismissFailed,
   endRun,
+  failRun,
   finishSave,
   markSubmitted,
   markUnsaved,
@@ -149,6 +151,15 @@ export function regenerate(id: string) {
   void startRun({ ...row.params }, draft);
 }
 
+/** 重试失败的任务：按失败时记下的请求快照重新发一次；旧的失败卡换成新的生成卡 */
+export function retryTask(id: string) {
+  const task = useWorkspace.getState().tasks.find((item) => item.id === id);
+  if (!task || task.run.phase !== "failed") return;
+  const { params, draft } = task.run.retry;
+  dismissFailed(id);
+  void startRun(params, draft);
+}
+
 /** 尺寸按当前约束重算，恒合法 */
 async function regenerateInpaint(row: HistoryRow) {
   const read = await readInpaintDraft(row);
@@ -211,6 +222,7 @@ async function runGeneration(params: GenParams, draft: EditDraft | null) {
         params,
         sizes: params.sizes,
         edit,
+        draft,
         startedAt,
         originPrompt,
         config,
@@ -240,11 +252,14 @@ async function runGeneration(params: GenParams, draft: EditDraft | null) {
     );
     if (await persist(prepared, id)) toast(t("toast.generated"));
   } catch (caught) {
-    endRun(id);
     if (isAbortError(caught)) {
+      // 取消是用户主动的：任务卡直接收走
+      endRun(id);
       toast(t("toast.cancelled"));
       return;
     }
+    // 失败：任务卡留在列表里，用户可以重试
+    failRun(id, errorKind(caught), { params, draft });
     toastError(caught);
   } finally {
     controllers.delete(id);
@@ -282,6 +297,8 @@ async function generateMulti(job: {
   params: GenParams;
   sizes: PixelSize[];
   edit: EditSubmission | undefined;
+  /** 提交时的输入源：失败后重试要用它重新发出同一份请求 */
+  draft: EditDraft | null;
   startedAt: number;
   originPrompt: string | undefined;
   config: ApiConfig;
@@ -340,9 +357,14 @@ async function generateMulti(job: {
 
   if (!done.length) {
     // 一张都没完成：取消同单尺寸取消；否则同单尺寸失败，提示第一个失败比例的错误，草稿保留
-    endRun(job.id);
-    if (signal.aborted || !failed.length) toast(t("toast.cancelled"));
-    else toastError(failed[0].error);
+    if (signal.aborted || !failed.length) {
+      endRun(job.id);
+      toast(t("toast.cancelled"));
+      return;
+    }
+    // 全部失败：任务卡留在列表里，用户可以重试
+    failRun(job.id, errorKind(failed[0].error), { params, draft: job.draft });
+    toastError(failed[0].error);
     return;
   }
 

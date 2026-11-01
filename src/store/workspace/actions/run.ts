@@ -3,7 +3,12 @@ import type { PreparedGeneration } from "../../../lib/generation";
 import type { ApiErrorKind } from "../../../lib/types";
 import type { GenPlan } from "../../../lib/view-models";
 import { uuid } from "../../../lib/uuid";
-import { useWorkspace, type GenerationTask, type RunSlot } from "../index";
+import {
+  useWorkspace,
+  type GenerationTask,
+  type RetryRequest,
+  type RunSlot,
+} from "../index";
 import { set, freshDraft } from "./internal";
 
 export function beginRun(
@@ -106,6 +111,36 @@ export const endRun = (id?: string) =>
   set((s) => {
     const task = id ? s.tasks.find((item) => item.id === id) : s.tasks[0];
     return task?.run.phase === "generating"
+      ? { tasks: s.tasks.filter((item) => item !== task) }
+      : s;
+  });
+
+/** 失败：任务留在列表里，用户可以重试或手动移除；只改自己的任务 */
+export const failRun = (
+  id: string,
+  failure: ApiErrorKind,
+  retry: RetryRequest,
+) =>
+  updateTask(id, (task) =>
+    task.run.phase === "generating"
+      ? {
+          ...task,
+          run: {
+            phase: "failed",
+            failure,
+            plan: task.run.plan,
+            slots: task.run.slots,
+            retry,
+          },
+        }
+      : task,
+  );
+
+/** 手动移除失败的任务卡；别的任务不受影响 */
+export const dismissFailed = (id: string) =>
+  set((s) => {
+    const task = s.tasks.find((item) => item.id === id);
+    return task?.run.phase === "failed"
       ? { tasks: s.tasks.filter((item) => item !== task) }
       : s;
   });

@@ -88,8 +88,10 @@ export function selectHistory(id: string) {
 }
 
 export function newGeneration() {
-  // 后台任务有自己的草稿快照，回首页只切换查看目标。
-  if (useWorkspace.getState().tasks.length) {
+  // 后台任务有自己的草稿快照，回首页只切换查看目标；失败的任务卡留在列表里，不挡着新建。
+  if (
+    useWorkspace.getState().tasks.some((task) => task.run.phase !== "failed")
+  ) {
     viewRecord(null);
     return;
   }

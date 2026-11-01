@@ -3,11 +3,12 @@ import { useEffect, useState } from "react";
 import { TopNav } from "../components/TopNav";
 import { HistoryDrawer } from "../components/overlays/HistoryDrawer";
 import { SettingsModal } from "../components/overlays/SettingsModal";
+import { leaveGifWorkspace } from "../flows/gif";
 import { saveSettings, testConnection } from "../flows/settings";
 import { newGeneration, selectHistory, toggleStar } from "../flows/navigation";
 import { useTheme } from "../hooks/useTheme";
 import type { WorkspaceAssets } from "../hooks/useWorkspaceAssets";
-import { canOpenPlayground } from "../lib/workspace-rules";
+import { canOpenGif, canOpenPlayground } from "../lib/workspace-rules";
 import { useSettings } from "../store/settings";
 import { useWorkspace } from "../store/workspace";
 import {
@@ -15,6 +16,7 @@ import {
   closePlayground,
   closeSettings,
   openDrawer,
+  openGif,
   openPlayground,
   openSettings,
 } from "../store/workspace/actions";
@@ -31,6 +33,7 @@ export function ChromeArea({ assets }: { assets: WorkspaceAssets }) {
   const drawerOpen = useWorkspace((s) => s.view.drawerOpen);
   const settingsOpen = useWorkspace((s) => s.view.settingsOpen);
   const playgroundOpen = useWorkspace((s) => s.view.playgroundOpen);
+  const gifOpen = useWorkspace((s) => s.view.gifOpen);
   const drawing = useWorkspace((s) => s.drawing !== null);
 
   const [usageBytes, setUsageBytes] = useState<number | null>(null);
@@ -53,6 +56,9 @@ export function ChromeArea({ assets }: { assets: WorkspaceAssets }) {
         videoOpen={playgroundOpen}
         canOpenVideo={canOpenPlayground({ drawing })}
         onVideo={() => (playgroundOpen ? closePlayground() : openPlayground())}
+        gifOpen={gifOpen}
+        canOpenGif={canOpenGif({ drawing })}
+        onGif={() => (gifOpen ? void leaveGifWorkspace() : openGif())}
       />
 
       <HistoryDrawer

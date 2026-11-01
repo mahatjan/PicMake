@@ -10,6 +10,7 @@ import {
   finishRead,
   removeDraftInput,
   removeDraftMask,
+  setBarMode,
 } from "../store/workspace/actions";
 
 const currentReadId = () => useWorkspace.getState().draft.readId;
@@ -35,6 +36,21 @@ export async function addFiles(files: File[]) {
     }
   }
   finishRead(readId, added, issues);
+}
+
+/** 剪贴板图片没有文件名：按类型补一个，缩略图与提示里能认出是剪贴板来的 */
+const withClipboardName = (file: File) => {
+  const ext =
+    file.type === "image/jpeg" ? "jpg" : (file.type.split("/")[1] ?? "");
+  const name = `clipboard.${ext.replace(/[^a-z0-9]/gi, "") || "img"}`;
+  return new File([file], name, { type: file.type });
+};
+
+/** 剪贴板图片：与上传同一条路；先展开创作条，新图与读取提示都看得见 */
+export async function addClipboardImages(files: File[]) {
+  if (!files.length) return;
+  setBarMode("full");
+  await addFiles(files.map(withClipboardName));
 }
 
 export function removeInput(id: string) {

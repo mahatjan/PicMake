@@ -44,6 +44,8 @@
     "@react-aria/utils": "~3.34.1",
     "dexie": "~4.4.6",
     "eventsource-parser": "~4.1.1",
+    "gifenc": "~1.0.3",
+    "gifuct-js": "~2.1.2",
     "i18next": "~26.4.2",
     "lucide-react": "~1.47.0",
     "perfect-freehand": "~1.2.3",

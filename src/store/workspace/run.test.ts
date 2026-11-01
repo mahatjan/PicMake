@@ -1,18 +1,23 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { HistoryRow } from "../../db/schema";
 import type { PreparedGeneration } from "../../lib/generation";
+import type { GenParams } from "../../lib/types";
 import { initialWorkspace, useWorkspace } from "./index";
 import {
   beginRun,
   beginSave,
   discardUnsaved,
+  dismissFailed,
   endRun,
+  failRun,
   finishSave,
   initializeDraft,
   markSubmitted,
   markUnsaved,
   openDrawer,
+  openGif,
   openLightbox,
+  openPlayground,
   patchForm,
   recordDeleted,
   resetWorkspace,
@@ -26,9 +31,11 @@ import {
   setSlotDone,
   setSlotFailed,
   setSlotPartial,
+  viewRecord,
 } from "./actions";
 import {
   findRow,
+  selectActiveCount,
   selectDisplayRow,
   selectPending,
   selectRun,
@@ -39,6 +46,15 @@ import {
 
 const state = () => useWorkspace.getState();
 const plan = { n: 1, size: "auto" } as const;
+const params: GenParams = {
+  model: "flare",
+  prompt: "猫",
+  size: "auto",
+  quality: "high",
+  n: 1,
+  background: "auto",
+  outputFormat: "png",
+};
 const row = (id: string, imageIds = [`${id}-1`]) =>
   ({ id, imageIds }) as HistoryRow;
 const prepared = (id: string, imageCount = 1): PreparedGeneration => {
@@ -124,7 +140,7 @@ describe("生成生命周期", () => {
     expect(state()).toBe(before);
   });
 
-  it("endRun：取消或失败回到 idle，草稿保留；保存阶段不受影响", () => {
+  it("endRun：取消回到 idle，草稿保留；保存阶段不受影响", () => {
     patchForm({ prompt: "猫" });
     beginRun(plan);
     endRun();
@@ -134,6 +150,33 @@ describe("生成生命周期", () => {
     beginSave(prepared("a"));
     endRun();
     expect(selectRun(state()).phase).toBe("saving");
+  });
+
+  it("failRun：失败的任务留在列表里，记下失败原因与重发快照", () => {
+    beginRun(plan);
+    const id = state().tasks[0].id;
+    const retry = { params, draft: null };
+    failRun(id, "auth", retry);
+    expect(state().tasks).toHaveLength(1);
+    expect(state().tasks[0].run).toMatchObject({
+      phase: "failed",
+      failure: "auth",
+      retry,
+    });
+    // 失败不算在跑：全局状态回到空闲，别的任务不受影响
+    expect(selectRun(state())).toEqual({ phase: "idle" });
+    expect(selectActiveCount(state())).toBe(0);
+  });
+
+  it("dismissFailed：只移除指定的那张失败任务卡", () => {
+    beginRun(plan);
+    const id = state().tasks[0].id;
+    failRun(id, "auth", { params, draft: null });
+    // 不是失败任务就不动
+    dismissFailed("missing");
+    expect(state().tasks).toHaveLength(1);
+    dismissFailed(id);
+    expect(state().tasks).toHaveLength(0);
   });
 
   it("保存失败：saving → unsaved，结果留在内存并作为展示记录；放弃后回到 idle", () => {
@@ -296,6 +339,24 @@ describe("resetWorkspace", () => {
     markUnsaved();
     resetWorkspace("a");
     expect(selectRun(state()).phase).toBe("unsaved");
+  });
+});
+
+describe("回首页：关掉工作台", () => {
+  it("viewRecord 与 resetWorkspace 都关掉视频页和 GIF 工作台", () => {
+    openPlayground();
+    expect(state().view.playgroundOpen).toBe(true);
+    viewRecord(null);
+    expect(state().view.playgroundOpen).toBe(false);
+
+    openGif();
+    expect(state().view.gifOpen).toBe(true);
+    viewRecord(null);
+    expect(state().view.gifOpen).toBe(false);
+
+    openGif();
+    resetWorkspace(null);
+    expect(state().view.gifOpen).toBe(false);
   });
 });
 
