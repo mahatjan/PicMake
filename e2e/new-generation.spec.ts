@@ -9,7 +9,7 @@ const locales = {
     expand: "展开并生成",
     prompt: "画面描述",
     generate: "生成图片",
-    barCancel: "取消",
+    cancelTask: /取消任务/,
     done: "生成完成 · 已保存本地",
     newGeneration: "首页",
     discard: "放弃当前草稿？",
@@ -26,7 +26,7 @@ const locales = {
     expand: "Expand and generate",
     prompt: "Prompt",
     generate: "Generate image",
-    barCancel: "Cancel",
+    cancelTask: /Cancel task/,
     done: "Generation complete · saved locally",
     newGeneration: "Home",
     discard: "Discard the current draft?",
@@ -82,10 +82,10 @@ for (const [locale, text] of Object.entries(locales)) {
         await expect(video).toBeHidden();
         await expect(videoButton).toHaveAttribute("aria-pressed", "false");
         await expect(prompt).toHaveValue("navigation check [slow]");
-        // 生成中停在画廊：取消入口在创作条上，生成卡在网格最前
+        // 生成中停在画廊：取消入口在画廊的生成卡上，生成卡在网格最前
         const cancelRun = page
-          .locator(".pm-bar")
-          .getByRole("button", { name: text.barCancel });
+          .locator(".pm-gal-card.is-gen")
+          .getByRole("button", { name: text.cancelTask });
         await expect(cancelRun).toBeVisible();
         const genCard = page.locator(".pm-gal-card.is-gen");
         await expect(genCard).toBeVisible();

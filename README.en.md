@@ -78,6 +78,7 @@ The interface comes in English and Simplified Chinese and follows your browser l
 
 - If a request succeeds but saving locally fails, the result stays in memory so you can still view and download it, and you're asked to confirm before leaving
 - Closing or reloading the page while an image is generating or saving brings up the browser's leave confirmation
+- The create bar is cleared after each submission (prompt, reference images and parameters). Turn on "Keep create bar contents after submitting" in the settings to tweak the same setup and generate again
 - Respects your system's reduced-motion setting
 
 <sub>The images in these screenshots come from a local mock. They are placeholder illustrations, not actual model output.</sub>

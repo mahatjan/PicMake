@@ -185,15 +185,14 @@ test("生成中每格各自进度，失败的格子显示失败标记，其余�
   await prompt(page).fill("失败标记 [500@1008x1792] [slow@1792x1008]");
   await generate(page).click();
 
-  // 进度由创作条承担（生成卡上只标"新作品生成中"，避免同一句话出现两次）
-  const bar = page.locator(".pm-bar");
-  await expect(bar.getByText("已完成 0/3")).toBeVisible();
-  // 9:16 失败、1:1 完成，16:9（放慢）还在生成：生成卡上能看到失败原因
+  // 进度与失败原因都在画廊的生成卡上：创作条不再重复一遍
   const genCard = page.locator(".pm-gal-card.is-gen");
+  await expect(genCard.getByText("已完成 0/3")).toBeVisible();
+  // 9:16 失败、1:1 完成，16:9（放慢）还在生成：生成卡上能看到失败原因
   await expect(genCard.getByText("生成失败")).toBeVisible();
   await expect(genCard.getByText("服务端暂时不可用")).toBeVisible();
-  await expect(bar.getByText("已完成 1/3")).toBeVisible();
-  await bar.getByRole("button", { name: "取消" }).click();
+  await expect(genCard.getByText("已完成 1/3")).toBeVisible();
+  await genCard.getByRole("button", { name: /取消任务/ }).click();
 });
 
 test("生成中取消：未完成的中止，已完成的照常保存", async ({ page }) => {
@@ -204,8 +203,9 @@ test("生成中取消：未完成的中止，已完成的照常保存", async ({
   await generate(page).click();
 
   // 1:1 与 9:16 先完成，16:9 被放慢
-  await expect(page.locator(".pm-bar").getByText("已完成 2/3")).toBeVisible();
-  await page.locator(".pm-bar").getByRole("button", { name: "取消" }).click();
+  const genCard = page.locator(".pm-gal-card.is-gen");
+  await expect(genCard.getByText("已完成 2/3")).toBeVisible();
+  await genCard.getByRole("button", { name: /取消任务/ }).click();
 
   await expect(page.getByText("已取消，已完成的 2 张已保存")).toBeVisible();
   await openNewest(page);
@@ -228,7 +228,10 @@ test("生成中取消且一张都没完成：同单尺寸取消，参数草稿�
   await prompt(page).fill("全部放慢 [slow]");
   await generate(page).click();
   await expect(prompt(page)).toHaveValue("");
-  await page.locator(".pm-bar").getByRole("button", { name: "取消" }).click();
+  await page
+    .locator(".pm-gal-card.is-gen")
+    .getByRole("button", { name: /取消任务/ })
+    .click();
 
   await expect(page.getByText("已取消生成")).toBeVisible();
   await expect(prompt(page)).toHaveValue("");
@@ -367,7 +370,9 @@ test("生成中关闭或刷新页面会弹出浏览器的离开确认", async ({
   await prompt(page).fill("离开确认 [slow]");
   await generate(page).click();
   await expect(
-    page.locator(".pm-bar").getByRole("button", { name: "取消" }),
+    page
+      .locator(".pm-gal-card.is-gen")
+      .getByRole("button", { name: /取消任务/ }),
   ).toBeVisible();
 
   const dialogEvent = page.waitForEvent("dialog");

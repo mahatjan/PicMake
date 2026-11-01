@@ -80,6 +80,8 @@ async function startRun(params: GenParams, draft: EditDraft | null) {
 export function generate() {
   const state = useWorkspace.getState();
   const { draft } = state;
+  // 提交后保留还是复位，在点击时按设置定下来：后面不再重新读设置
+  const keep = useSettings.getState().keepDraft;
   const decision = submitDecision({ run: selectRun(state).phase });
   const checked = draftToParams({
     form: draft.form,
@@ -120,13 +122,13 @@ export function generate() {
         )
           return;
         discardUnsaved(unsaved.id);
-        if (useWorkspace.getState().draft === draft) markSubmitted();
+        if (useWorkspace.getState().draft === draft) markSubmitted(keep);
         void startRun(params, edit);
       },
     });
     return;
   }
-  markSubmitted();
+  markSubmitted(keep);
   void startRun(params, edit);
 }
 

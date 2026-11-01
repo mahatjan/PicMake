@@ -249,11 +249,10 @@ test("非流式等待期间仍可取消，描述保持已清空", async ({ page 
     await expect(
       page.getByRole("textbox", { name: "画面描述", exact: true }),
     ).toHaveValue("");
-    await expect(page.locator(".pm-bar-genst")).toHaveText("正在生成");
-    await expect(page.locator(".pm-bar-gennote")).toHaveText(
-      "完成后自动保存到本地",
-    );
-    await page.locator(".pm-bar").getByRole("button", { name: "取消" }).click();
+    // 状态与取消入口都在画廊的生成卡上：创作条只留输入
+    const genCard = page.locator(".pm-gal-card.is-gen");
+    await expect(genCard.getByText("新作品生成中")).toBeVisible();
+    await genCard.getByRole("button", { name: /取消任务/ }).click();
     await expect(
       page.getByRole("textbox", { name: "画面描述", exact: true }),
     ).toHaveValue("");

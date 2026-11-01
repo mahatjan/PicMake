@@ -71,11 +71,13 @@ for (const locale of ["zh-CN", "en"]) {
           await expect(prompt).toHaveValue("");
           await expect.poll(() => prompts.length).toBe(2);
           await expect(cards).toHaveCount(2);
+          // 状态由画廊的生成卡承担：创作条不再重复一遍
           await expect(
-            page.getByText(
-              en ? "2 tasks generating in parallel" : "2 个任务同时生成中",
-              { exact: true },
-            ),
+            cards
+              .first()
+              .getByText(en ? "Creating a new image" : "新作品生成中", {
+                exact: true,
+              }),
           ).toBeVisible();
           await expect(send).toBeEnabled();
           await prompt.fill("");
@@ -118,9 +120,14 @@ for (const locale of ["zh-CN", "en"]) {
           await send.click();
           await expect(prompt).toHaveValue("");
           await expect(cards).toHaveCount(2);
-          await page.locator(".pm-bar .pm-bar-cancel").click();
+          // 取消入口在画廊的生成卡上：逐张取消
+          const cancelTask = cards.getByRole("button", {
+            name: en ? /Cancel task/ : /取消任务/,
+          });
+          await cancelTask.first().click();
+          await expect(cards).toHaveCount(1);
+          await cancelTask.first().click();
           await expect(cards).toHaveCount(0);
-          await expect(page.locator(".pm-bar-gen")).toBeHidden();
           expect(prompts).toEqual([
             first,
             second,

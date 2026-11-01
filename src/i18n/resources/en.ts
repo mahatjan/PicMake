@@ -59,6 +59,9 @@ export const en = {
     streamEnabled: "Enable streaming",
     streamHint:
       "Preview images as they generate. Turn off if your provider does not support streaming, and wait for the full result. Applies to generation, editing and inpainting.",
+    keepDraft: "Keep create bar contents after submitting",
+    keepDraftHint:
+      "Off (default): the prompt, reference images and parameters are cleared after each submission, so the next one starts blank. On: everything is kept, so you can tweak it and generate again.",
     keyHint:
       "The key is stored only in this browser and is sent only to the URL above. If you use a relay, your image data passes through it.",
     videoKey: "API Key (video)",
@@ -224,16 +227,8 @@ export const en = {
       "Sketch the composition, outlines and color blocks, then use it as input",
     continueSketchDesc: "Reopen the confirmed sketch to keep editing",
     atMax: "Reached the limit of {{max}} input images",
-    genStatus: "Generating · progressive preview",
     genCancel: "Cancel",
-    genCancelAll: "Cancel all",
-    genActive_one: "{{count}} task generating",
-    genActive_other: "{{count}} tasks generating in parallel",
-    genNoteParallel:
-      "Tasks generate and save independently · keep submitting new tasks",
-    genNote: "Saved locally when done",
     genProgress: "{{done}}/{{total}} done",
-    genNoteMulti: "One request per ratio · saved locally when all finish",
     done: "Generation complete · saved locally",
     duration: "Took",
     dismiss: "Collapse and go back to input",

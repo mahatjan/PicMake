@@ -30,6 +30,8 @@ export function ChromeArea({ assets }: { assets: WorkspaceAssets }) {
   const videoApiKey = useSettings((s) => s.videoApiKey);
   const locale = useSettings((s) => s.locale);
   const setLocale = useSettings((s) => s.setLocale);
+  const keepDraft = useSettings((s) => s.keepDraft);
+  const setKeepDraft = useSettings((s) => s.setKeepDraft);
   const drawerOpen = useWorkspace((s) => s.view.drawerOpen);
   const settingsOpen = useWorkspace((s) => s.view.settingsOpen);
   const playgroundOpen = useWorkspace((s) => s.view.playgroundOpen);
@@ -90,6 +92,8 @@ export function ChromeArea({ assets }: { assets: WorkspaceAssets }) {
         onThemeChange={theme.setPref}
         locale={locale}
         onLocaleChange={setLocale}
+        keepDraft={keepDraft}
+        onKeepDraftChange={setKeepDraft}
         onTest={testConnection}
         onSave={saveSettings}
         onClose={closeSettings}

@@ -10,13 +10,12 @@ import type {
   DisplayInput,
   InpaintBarInfo,
 } from "../../lib/view-models";
-import type { FidelityChoice, ModelId, UploadIssue } from "../../lib/types";
+import type { FidelityChoice, UploadIssue } from "../../lib/types";
 import { MAX_INPUT_IMAGES } from "../../lib/types";
 import { BarChip } from "./BarChip";
 
 import { InputThumbs } from "./InputThumbs";
 import { MiniBar } from "./MiniBar";
-import { GenBar } from "./GenBar";
 import { DoneBar } from "./DoneBar";
 import { ParamChips } from "./ParamChips";
 
@@ -257,19 +256,14 @@ function FullBar(props: FullBarProps) {
   );
 }
 
-/** 底栏总装：状态优先级 generating > complete > (full > mini)。生成中在进度行下面照常给出输入，
- *  子节点按固定次序占位，生成开始与结束都不重新挂载 FullBar（否则正在输入的描述会失焦） */
+/** 底部创作条总装：状态优先级 generating > complete > (full > mini)。生成中照常给出输入，
+ *  子节点按固定次序占位，生成开始与结束都不重新挂载 FullBar（否则正在输入的描述会失焦）。
+ *  生成状态与取消入口由画廊的生成卡承担，条上不再重复一遍 */
 export function CreateBar(
   props: FullBarProps & {
     mode: "mini" | "full";
     generating: boolean;
-    generatingModel: ModelId;
-    activeCount: number;
     done: DisplayGen | null;
-    partialIndex: number | null;
-    /** 多尺寸生成中已完成的请求数与总数；单尺寸为 null */
-    progress: { done: number; total: number } | null;
-    onCancel: () => void;
     onExpand: () => void;
     onAgain: () => void;
     onTweak: () => void;
@@ -282,12 +276,7 @@ export function CreateBar(
   const {
     mode,
     generating,
-    generatingModel,
     done,
-    partialIndex,
-    progress,
-    activeCount,
-    onCancel,
     onExpand,
     onAgain,
     onTweak,
@@ -305,15 +294,6 @@ export function CreateBar(
       aria-label={t("bar.label")}
       data-state={state}
     >
-      {generating && (
-        <GenBar
-          model={generatingModel}
-          partialIndex={partialIndex}
-          progress={progress}
-          activeCount={activeCount}
-          onCancel={onCancel}
-        />
-      )}
       {(generating || mode === "full") && <FullBar {...full} />}
       {state === "mini" && (
         <MiniBar form={full.form} disabled={full.reading} onExpand={onExpand} />

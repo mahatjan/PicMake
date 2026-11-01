@@ -146,20 +146,20 @@ test("生成中提交下一条会立即并行请求，后提交的任务可先�
   await generate(page).click();
   await expect(prompt(page)).toHaveValue("");
 
-  await expect(page.locator(".pm-bar-gen")).toBeVisible();
+  await expect(page.locator(".pm-gal-card.is-gen")).toHaveCount(1);
   await prompt(page).fill("第二条并行生成");
   await generate(page).click();
   await expect(prompt(page)).toHaveValue("");
   await expect(page.locator(".pm-gal-card.is-gen")).toHaveCount(2);
-  await expect(page.getByText("2 个任务同时生成中")).toBeVisible();
   await expect.poll(() => requests.length, { timeout: 2000 }).toBe(2);
   const gallery = page.locator(".pm-gal");
   await expect(
     gallery.getByRole("button", { name: /第二条并行生成/ }),
   ).toBeVisible();
   await expect(gallery.locator(".pm-gal-card.is-gen")).toHaveCount(1);
-  await expect(page.locator(".pm-bar-gen")).toBeVisible();
-  await expect(page.locator(".pm-bar-gen")).toBeHidden({ timeout: 15000 });
+  await expect(page.locator(".pm-gal-card.is-gen")).toHaveCount(0, {
+    timeout: 15000,
+  });
   await expect(page.getByText("生成完成 · 已保存本地")).toBeVisible({
     timeout: 15000,
   });
@@ -170,8 +170,10 @@ test("生成中可以取消，取消后回到空白输入状态", async ({ page 
   await prompt(page).fill("慢速生成 [slow]");
   await generate(page).click();
   await expect(prompt(page)).toHaveValue("");
-  // 取消入口在创作条上（生成卡不可点），画廊的生成卡随取消消失
-  const cancel = page.locator(".pm-bar").getByRole("button", { name: "取消" });
+  // 取消入口在画廊的生成卡上：创作条不再重复状态
+  const cancel = page
+    .locator(".pm-gal-card.is-gen")
+    .getByRole("button", { name: /取消任务/ });
   await expect(cancel).toBeVisible();
   await expect(page.locator(".pm-gal-card.is-gen")).toBeVisible();
   await cancel.click();

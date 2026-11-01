@@ -20,6 +20,8 @@ interface SettingsState extends ApiProfilesDraft {
   videoLegacyImported: boolean;
   theme: ThemePref;
   locale: LocalePref;
+  /** 提交任务后保留创作条内容（描述、参考图与参数）；默认不保留，提交后草稿复位 */
+  keepDraft: boolean;
   saveApiProfiles: (
     draft: ApiProfilesDraft,
     videoApiKey: string,
@@ -29,6 +31,7 @@ interface SettingsState extends ApiProfilesDraft {
   markVideoLegacyImported: () => void;
   setTheme: (theme: ThemePref) => void;
   setLocale: (locale: LocalePref) => void;
+  setKeepDraft: (keepDraft: boolean) => void;
 }
 
 export const useSettings = create<SettingsState>()(
@@ -40,6 +43,7 @@ export const useSettings = create<SettingsState>()(
       videoLegacyImported: false,
       theme: DEFAULT_THEME,
       locale: DEFAULT_LOCALE_PREF,
+      keepDraft: false,
       saveApiProfiles: (draft, videoApiKey, streamEnabled) => {
         const patch = apiProfilesPatch(draft);
         if (!patch) return false;
@@ -50,6 +54,7 @@ export const useSettings = create<SettingsState>()(
       markVideoLegacyImported: () => set({ videoLegacyImported: true }),
       setTheme: (theme) => set({ theme }),
       setLocale: (locale) => set({ locale }),
+      setKeepDraft: (keepDraft) => set({ keepDraft }),
     }),
     {
       name: "PicMake-settings",

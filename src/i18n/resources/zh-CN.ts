@@ -60,6 +60,9 @@ export const zhCN = {
     streamEnabled: "启用流式响应",
     streamHint:
       "开启后可逐步预览图片；服务商不支持时请关闭，等待完整结果。适用于生图、编辑和局部重绘。",
+    keepDraft: "提交后保留创作条内容",
+    keepDraftHint:
+      "关闭时（默认）：提交后清空画面描述、参考图与参数，下一条从空白开始。打开时：全部保留，方便改一改再生成。",
     keyHint:
       "Key 仅保存在本机浏览器，只发往上面配置的地址；使用中转站时，画面数据会经过中转方。",
     videoKey: "API Key（生视频）",
@@ -215,15 +218,8 @@ export const zhCN = {
     drawSketchDesc: "画构图、轮廓与色块，确认后作为输入",
     continueSketchDesc: "打开已确认的草图继续修改",
     atMax: "已达 {{max}} 张输入上限",
-    genStatus: "正在生成 · 渐进预览",
     genCancel: "取消",
-    genCancelAll: "全部取消",
-    genActive_one: "{{count}} 个任务同时生成中",
-    genActive_other: "{{count}} 个任务同时生成中",
-    genNoteParallel: "任务独立生成并自动保存 · 可以继续提交新任务",
-    genNote: "完成后自动保存到本地",
     genProgress: "已完成 {{done}}/{{total}}",
-    genNoteMulti: "每个比例单独请求 · 全部结束后自动保存到本地",
     done: "生成完成 · 已保存本地",
     duration: "耗时",
     dismiss: "收起，回到输入",

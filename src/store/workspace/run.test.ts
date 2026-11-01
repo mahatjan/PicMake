@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { HistoryRow } from "../../db/schema";
 import type { PreparedGeneration } from "../../lib/generation";
+import { DEFAULT_FORM } from "../../lib/params";
 import type { GenParams } from "../../lib/types";
 import { initialWorkspace, useWorkspace } from "./index";
 import {
@@ -77,15 +78,23 @@ beforeEach(() => {
 });
 
 describe("生成生命周期", () => {
-  it("markSubmitted：只清空描述，保留参数、输入图与提交前快照", () => {
+  it("markSubmitted：不保留时整份草稿复位（描述、输入图与参数都清空）", () => {
     initializeDraft(undefined, [{ imageId: "reference" }]);
-    patchForm({ prompt: "猫", ratio: "9:16", quality: "high" });
+    patchForm({ prompt: "猫", ratio: "9:16", quality: "low" });
+    markSubmitted(false);
+    expect(state().draft.form).toEqual(DEFAULT_FORM);
+    expect(state().draft.inputs).toEqual([]);
+    expect(state().draft.dirty).toBe(false);
+  });
+
+  it("markSubmitted：保留时描述、输入图与参数原样留下", () => {
+    initializeDraft(undefined, [{ imageId: "reference" }]);
+    patchForm({ prompt: "猫", ratio: "9:16" });
     const before = state().draft;
-    markSubmitted();
-    expect(state().draft.form).toEqual({ ...before.form, prompt: "" });
+    markSubmitted(true);
+    expect(state().draft.form).toBe(before.form);
     expect(state().draft.inputs).toBe(before.inputs);
     expect(state().draft.dirty).toBe(false);
-    expect(before.form.prompt).toBe("猫");
   });
 
   it("beginRun：只能从 idle 进入；清空选中、完成标记、过渡结果与查看状态，保留返回目标与草稿", () => {
@@ -204,11 +213,11 @@ describe("生成生命周期", () => {
     expect(selectRun(state()).phase).toBe("saving");
   });
 
-  it("finishSave：留在首页画廊并进入 complete 态，草稿重置但保留参数", () => {
+  it("finishSave：留在首页画廊并进入 complete 态；草稿在提交时已复位，这里不再动它", () => {
     const p = prepared("a");
     patchForm({ prompt: "猫", quality: "high" });
     setReturnId("src");
-    markSubmitted();
+    markSubmitted(false);
     beginRun(plan);
     beginSave(p);
     finishSave(p);
@@ -227,7 +236,7 @@ describe("生成生命周期", () => {
   it("finishSave：提交后草稿又被改过（正在写下一条）就原样留着，不冲掉", () => {
     const p = prepared("a");
     patchForm({ prompt: "猫" });
-    markSubmitted();
+    markSubmitted(false);
     beginRun(plan);
     // 生成期间用户接着写下一条
     patchForm({ prompt: "狗" });

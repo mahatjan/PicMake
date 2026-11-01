@@ -1,10 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const mocked = vi.hoisted(() => ({ keepDraft: false }));
+
 vi.mock("@heroui/react", () => ({ toast: vi.fn() }));
 vi.mock("../api/client", () => ({ requestImages: vi.fn() }));
 vi.mock("../db/history", () => ({ saveGeneration: vi.fn() }));
 vi.mock("../store/settings", () => ({
-  useSettings: { getState: () => ({ baseUrl: "http://mock", apiKey: "k" }) },
+  useSettings: {
+    getState: () => ({
+      baseUrl: "http://mock",
+      apiKey: "k",
+      keepDraft: mocked.keepDraft,
+    }),
+  },
 }));
 
 import { toast } from "@heroui/react";
@@ -14,6 +22,7 @@ import type { HistoryRow } from "../db/schema";
 import { t } from "../i18n";
 import { errorMessage } from "../i18n/errors";
 import type { PreparedGeneration } from "../lib/generation";
+import { DEFAULT_FORM } from "../lib/params";
 import { ApiError, type GenParams } from "../lib/types";
 import { initialWorkspace, useWorkspace } from "../store/workspace";
 import {
@@ -38,6 +47,7 @@ const prepared = {
 
 beforeEach(() => {
   useWorkspace.setState(initialWorkspace(), true);
+  mocked.keepDraft = false;
   vi.mocked(toast).mockClear();
   vi.mocked(saveGeneration).mockReset().mockResolvedValue(undefined);
   // 请求一直不返回：只关心有没有发起
@@ -165,6 +175,60 @@ describe("generate", () => {
     expect(state().view.focusSeq).toBe(1);
     expect(requestImages).not.toHaveBeenCalled();
     expect(selectRun(state()).phase).toBe("unsaved");
+  });
+
+  it("保留开关关闭（默认）：提交后描述、参考图与参数都清空", () => {
+    mocked.keepDraft = false;
+    useWorkspace.setState((s) => ({
+      draft: {
+        ...s.draft,
+        inputs: [
+          {
+            imageId: "a",
+            name: "a.png",
+            upload: {
+              id: "a",
+              blob: new Blob(["x"]),
+              width: 10,
+              height: 10,
+              format: "png",
+            },
+          },
+        ],
+      },
+    }));
+    patchForm({ prompt: "猫", ratio: "9:16" });
+    generate();
+    expect(state().draft.form.prompt).toBe("");
+    expect(state().draft.form.ratio).toBe(DEFAULT_FORM.ratio);
+    expect(state().draft.inputs).toEqual([]);
+  });
+
+  it("保留开关打开：提交后描述、参考图与参数都留着", () => {
+    mocked.keepDraft = true;
+    useWorkspace.setState((s) => ({
+      draft: {
+        ...s.draft,
+        inputs: [
+          {
+            imageId: "a",
+            name: "a.png",
+            upload: {
+              id: "a",
+              blob: new Blob(["x"]),
+              width: 10,
+              height: 10,
+              format: "png",
+            },
+          },
+        ],
+      },
+    }));
+    patchForm({ prompt: "猫", ratio: "9:16" });
+    generate();
+    expect(state().draft.form.prompt).toBe("猫");
+    expect(state().draft.form.ratio).toBe("9:16");
+    expect(state().draft.inputs).toHaveLength(1);
   });
 });
 
@@ -350,7 +414,7 @@ describe("多尺寸生成", () => {
     );
   });
 
-  it("全部失败：不入库，只弹一条第一个失败的错误提示，任务卡留在列表里，草稿保留", async () => {
+  it("全部失败：不入库，只弹一条第一个失败的错误提示，任务卡留在列表里", async () => {
     const first = new ApiError("auth", "", 401);
     vi.mocked(requestImages)
       .mockRejectedValueOnce(first)
@@ -362,7 +426,8 @@ describe("多尺寸生成", () => {
     expect(saveGeneration).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledTimes(1);
     expect(toast).toHaveBeenCalledWith(errorMessage(first, t));
-    expect(state().draft.form).toMatchObject({ prompt: "", multi: true });
+    // 默认不保留：提交时草稿已复位
+    expect(state().draft.form).toMatchObject({ prompt: "", multi: false });
     expect(state().nav.lastDoneId).toBeNull();
     // 失败的任务卡留在列表里，等用户重试或移除
     expect(state().tasks).toHaveLength(1);

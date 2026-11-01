@@ -48,6 +48,9 @@ export function SettingsModal(props: {
   onThemeChange: (theme: ThemePref) => void;
   locale: LocalePref;
   onLocaleChange: (locale: LocalePref) => void;
+  /** 提交后是否保留创作条内容 */
+  keepDraft: boolean;
+  onKeepDraftChange: (keep: boolean) => void;
   onTest: TestConn;
   onSave: (
     draft: ApiProfilesDraft,
@@ -254,6 +257,15 @@ export function SettingsModal(props: {
               />
             </div>
             <p className="pm-hint">{t("settings.streamHint")}</p>
+            <div className="pm-settings-stream">
+              <span>{t("settings.keepDraft")}</span>
+              <Switch
+                checked={props.keepDraft}
+                onChange={props.onKeepDraftChange}
+                ariaLabel={t("settings.keepDraft")}
+              />
+            </div>
+            <p className="pm-hint">{t("settings.keepDraftHint")}</p>
             <label htmlFor="s-video-key">{t("settings.videoKey")}</label>
             <Input
               id="s-video-key"

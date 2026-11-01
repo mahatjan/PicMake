@@ -18,7 +18,7 @@ import {
   removeMask,
 } from "../flows/draft";
 import { downloadAll } from "../flows/export";
-import { cancelGenerate, generate, regenerate } from "../flows/generate";
+import { generate, regenerate } from "../flows/generate";
 import {
   addAsReference,
   returnToResult,
@@ -47,9 +47,6 @@ import {
   selectCanReturn,
   selectRun,
   selectBusy,
-  selectActiveCount,
-  selectRunDone,
-  selectRunTotal,
   selectShouldCollapseBar,
   selectCanPasteImage,
 } from "../store/workspace/selectors";
@@ -61,18 +58,7 @@ export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
   const previewId = useWorkspace((s) => s.view.previewId);
   const lastDoneId = useWorkspace((s) => s.nav.lastDoneId);
   const generating = useWorkspace(selectBusy);
-  const activeCount = useWorkspace(selectActiveCount);
   const run = useWorkspace(selectRun);
-  const generatingModel = useWorkspace(
-    (s) =>
-      s.tasks.find((task) => task.run === selectRun(s))?.model ??
-      s.draft.form.model,
-  );
-  const partialIndex =
-    run.phase === "generating" ? (run.partial?.index ?? null) : null;
-  // 多尺寸生成中的进度（已完成 / 总数）；单尺寸时总数为 0
-  const runDone = useWorkspace(selectRunDone);
-  const runTotal = useWorkspace(selectRunTotal);
   const canReturn = useWorkspace(selectCanReturn);
   // 草稿在 store：读取中 = readId 非空；附件缩略图与重绘尺寸在这里投影
   const draft = useWorkspace((s) => s.draft);
@@ -149,11 +135,7 @@ export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
       <CreateBar
         mode={barMode}
         generating={generating}
-        generatingModel={generatingModel}
-        activeCount={activeCount}
         done={doneGen}
-        partialIndex={partialIndex}
-        progress={runTotal > 0 ? { done: runDone, total: runTotal } : null}
         form={draft.form}
         customValid={customOk(draft.form)}
         images={draftImages}
@@ -167,7 +149,6 @@ export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
         barRef={barRef}
         onPatch={patchForm}
         onGenerate={generate}
-        onCancel={() => cancelGenerate()}
         onFiles={(files) => {
           void addFiles(files);
         }}

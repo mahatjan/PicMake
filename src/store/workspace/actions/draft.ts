@@ -12,6 +12,7 @@ import { useWorkspace, type WorkspaceState } from "../index";
 import {
   set,
   setDraft,
+  emptyDraft,
   freshDraft,
   withInpaint,
   type InpaintPayload,
@@ -31,11 +32,12 @@ export const patchForm = (patch: Partial<GenForm>) =>
 export const setInputFidelity = (inputFidelity: FidelityChoice) =>
   setDraft({ inputFidelity, dirty: true });
 
-/** 提交生成：请求参数已快照，立即清空描述；保留参数和输入图供下一次创作。 */
-export const markSubmitted = () =>
-  set((s) => ({
-    draft: { ...s.draft, form: { ...s.draft.form, prompt: "" }, dirty: false },
-  }));
+/** 提交生成：请求参数已快照。keep 为真时保留描述、输入图与参数（改一改可以再生成）；
+ *  否则整份草稿复位：描述清空、输入图清空、参数回到默认，下一条从空白开始 */
+export const markSubmitted = (keep: boolean) =>
+  keep
+    ? set((s) => ({ draft: { ...s.draft, dirty: false } }))
+    : set(() => ({ draft: emptyDraft() }));
 
 export const acceptSize = () => setDraft({ sizeAccepted: true });
 

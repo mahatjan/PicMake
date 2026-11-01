@@ -38,7 +38,6 @@ export interface GenerationTask {
   prompt: string;
   model: GenParams["model"];
   run: Exclude<Run, { phase: "idle" }>;
-  submittedDraft: WorkspaceState["draft"];
 }
 
 /** 多尺寸生成中的一个请求（一个比例一格）：各自的阶段、渐进预览、终稿与失败原因 */

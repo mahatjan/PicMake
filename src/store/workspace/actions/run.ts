@@ -9,7 +9,7 @@ import {
   type RetryRequest,
   type RunSlot,
 } from "../index";
-import { set, freshDraft } from "./internal";
+import { set } from "./internal";
 
 export function beginRun(
   plan: GenPlan,
@@ -35,7 +35,6 @@ export function beginRun(
       {
         ...task,
         run: { phase: "generating", plan, partial: null, slots },
-        submittedDraft: s.draft,
       },
       ...s.tasks,
     ],
@@ -167,14 +166,14 @@ export const discardUnsaved = (id?: string) =>
       : s;
   });
 
-/** 保存只收尾自己的任务；其他任务仍显示，新的草稿和已打开画板不被复位。 */
+/** 保存只收尾自己的任务；其他任务仍显示，新的草稿和已打开画板不被复位。
+ *  草稿在提交时就按设置处理过了（保留或复位），这里不再动它。 */
 export const finishSave = (prepared: PreparedGeneration, id?: string) =>
   set((s) => {
     const task = id ? s.tasks.find((item) => item.id === id) : s.tasks[0];
     if (id && task?.run.phase !== "saving") return s;
     const tasks = s.tasks.filter((item) => item !== task);
     const active = tasks.some((item) => item.run.phase !== "unsaved");
-    const sameDraft = !task || s.draft === task.submittedDraft;
     return {
       tasks,
       history: { ...s.history, recent: prepared },
@@ -183,9 +182,5 @@ export const finishSave = (prepared: PreparedGeneration, id?: string) =>
         lastDoneId: prepared.row.id,
         ...(active ? {} : { returnId: null }),
       },
-      draft:
-        s.draft.dirty || !sameDraft || active || s.drawing
-          ? s.draft
-          : freshDraft(s.draft),
     };
   });

@@ -646,8 +646,7 @@
   color: var(--pm-text-1);
 }
 
-/* generating / complete 态 */
-.pm-bar-gen,
+/* complete 态 */
 .pm-bar-done {
   display: flex;
   flex-direction: column;
@@ -658,27 +657,6 @@
   display: flex;
   align-items: center;
   gap: 10px;
-}
-.pm-bar-genmodel {
-  display: inline-flex;
-  align-items: center;
-  height: 30px;
-  padding: 0 11px;
-  border-radius: 8px;
-  background: var(--pm-accent-soft);
-  border: 1px solid var(--pm-accent-border);
-  color: var(--pm-accent);
-  font-size: 12px;
-  font-weight: 500;
-}
-.pm-bar-genst {
-  font-size: 12.5px;
-  color: var(--pm-text-2);
-}
-.pm-bar-genst b {
-  color: var(--pm-accent);
-  font-variant-numeric: tabular-nums;
-  font-weight: 500;
 }
 .pm-bar-cancel {
   margin-left: auto;
@@ -695,42 +673,6 @@
 .pm-bar-cancel:hover {
   color: var(--pm-error);
   border-color: var(--pm-error-border);
-}
-.pm-shimmer {
-  position: relative;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--pm-fill);
-  overflow: hidden;
-}
-.pm-shimmer::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--pm-accent),
-    transparent
-  );
-  background-size: 200% 100%;
-  animation: pm-shimmer 1.4s linear infinite;
-}
-.pm-bar-gennote {
-  font-size: 10.5px;
-  color: var(--pm-text-3);
-  margin: 0;
-}
-/* 生成中的任务摘要 */
-.pm-bar-genfoot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.pm-bar-genfoot .pm-bar-gennote {
-  flex: 1;
-  min-width: 0;
 }
 .pm-bar-ok {
   display: inline-flex;
@@ -811,14 +753,6 @@
   from {
     opacity: 0;
     transform: translateY(6px);
-  }
-}
-@keyframes pm-shimmer {
-  from {
-    background-position: 200% 0;
-  }
-  to {
-    background-position: -200% 0;
   }
 }
 

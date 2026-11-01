@@ -1,7 +1,7 @@
 /** actions 内部共用：写入助手与跨切片的纯计算；不经 index.ts 对外导出 */
 import type { ImageRow } from "../../../db/schema";
 import { inpaintTargetSize } from "../../../lib/inpaint";
-import { paramsToForm, withoutMulti } from "../../../lib/params";
+import { DEFAULT_FORM, paramsToForm, withoutMulti } from "../../../lib/params";
 import {
   type GenParams,
   type InpaintDraft,
@@ -27,6 +27,20 @@ export function freshDraft(
   return {
     form: params ? paramsToForm(params) : { ...current.form, prompt: "" },
     inputs,
+    inpaint: null,
+    sizeAccepted: false,
+    inputFidelity: "auto",
+    dirty: false,
+    readId: null,
+    uploadIssues: [],
+  };
+}
+
+/** 空草稿：描述、输入图与参数全部回到默认（提交后不保留时用） */
+export function emptyDraft(): WorkspaceState["draft"] {
+  return {
+    form: { ...DEFAULT_FORM },
+    inputs: [],
     inpaint: null,
     sizeAccepted: false,
     inputFidelity: "auto",

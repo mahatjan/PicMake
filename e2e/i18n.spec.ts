@@ -290,10 +290,9 @@ test.describe("英文界面", () => {
 
     await prompt(page).fill("cancel one [500@1008x1792] [slow@1792x1008]");
     await page.getByRole("button", { name: "Generate image" }).click();
-    // 进度在创作条上；失败原因在画廊的生成卡里
-    const bar = page.locator(".pm-bar");
+    // 进度与失败原因都在画廊的生成卡里
     const genCard = page.locator(".pm-gal-card.is-gen");
-    await expect(bar.getByText("1/3 done")).toBeVisible();
+    await expect(genCard.getByText("1/3 done")).toBeVisible();
     // 失败格在卡上显示「Failed · 错误标题」
     await expect(genCard.getByText("Failed")).toBeVisible();
     await expect(
@@ -301,7 +300,7 @@ test.describe("英文界面", () => {
     ).toBeVisible();
     await expectNoCjk(page);
     expect(await overflowing(page)).toEqual([]);
-    await bar.getByRole("button", { name: "Cancel" }).click();
+    await genCard.getByRole("button", { name: /Cancel task/ }).click();
     // 1 张已完成：复数的 _one 形式
     await expect(
       page.getByText("Cancelled. 1 finished image saved"),
