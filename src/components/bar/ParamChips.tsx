@@ -79,6 +79,12 @@ export function ParamChips(props: {
           onClick={() => onPatch({ model: "sunburst" })}
         />
         <PopRow
+          selected={f.model === "gpt26"}
+          name={MODEL_LABELS.gpt26}
+          desc="gpt-image-2.6"
+          onClick={() => onPatch({ model: "gpt26" })}
+        />
+        <PopRow
           selected={f.model === "gpt2"}
           name={t("params.modelGpt2")}
           desc={t("params.modelGpt2Desc")}
@@ -284,14 +290,42 @@ export function ParamChips(props: {
               ? ([
                   { value: "png", label: "PNG" },
                   { value: "webp", label: "WebP" },
+                  { value: "gif", label: "GIF" },
                 ] as Array<{ value: OutputFormat; label: string }>)
               : ([
                   { value: "png", label: "PNG" },
                   { value: "jpeg", label: "JPEG" },
                   { value: "webp", label: "WebP" },
+                  { value: "gif", label: "GIF" },
                 ] as Array<{ value: OutputFormat; label: string }>)
           }
         />
+        {f.fmt === "gif" && (
+          <div className="pm-pop-gif">
+            <label>
+              <span>{t("params.gifFrames")}</span>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                required
+                value={f.frames}
+                onChange={(e) => onPatch({ frames: e.target.value })}
+              />
+            </label>
+            <label>
+              <span>{t("params.gifFrameDuration")}</span>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                required
+                value={f.frameDuration}
+                onChange={(e) => onPatch({ frameDuration: e.target.value })}
+              />
+            </label>
+          </div>
+        )}
         {editing && (
           <>
             <p className="pm-pop-lb">{t("params.keepOriginal")}</p>

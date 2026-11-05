@@ -283,6 +283,54 @@
 .pm-bar-row2 > * {
   animation: pm-chip-in 0.18s ease-out backwards;
 }
+/* 窄屏：参数 chip 收成一行，不再把「⋯」挤到第二行。去掉值后面的说明后缀（弹层里仍有），
+   收紧间距；更窄的屏放不下时横向滑动。弹层相对创作条定位（chip 取消了定位），不受这一行裁切 */
+@media (max-width: 760px) {
+  .pm-bar-row2 {
+    flex-wrap: nowrap;
+    gap: 5px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 -2px;
+    padding: 0 2px;
+  }
+  .pm-bar-row2::-webkit-scrollbar {
+    display: none;
+  }
+  .pm-bar-row2 > * {
+    flex: none;
+  }
+  .pm-bar-row2 .pm-chip {
+    gap: 5px;
+    padding: 0 9px;
+  }
+  .pm-bar-row2 .pm-chip.icon {
+    padding: 0;
+  }
+  .pm-bar-row2 .pm-chip-suffix {
+    display: none;
+  }
+  /* 完成态的后续动作同样收成一行；「接下来」引导词省掉，按钮本身已说明用途 */
+  .pm-bar-donerow {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .pm-bar-donerow::-webkit-scrollbar {
+    display: none;
+  }
+  .pm-bar-donerow > * {
+    flex: none;
+  }
+  .pm-bar-donecap {
+    display: none;
+  }
+  /* 收起态只留输入入口：参数摘要与「点此展开参数」在展开后都能看到 */
+  .pm-bar-mini-in i,
+  .pm-bar-mini-meta {
+    display: none;
+  }
+}
 .pm-bar-row2 > *:nth-child(1) {
   animation-delay: 0.05s;
 }
@@ -558,6 +606,37 @@
 .pm-pop .pm-seg button {
   flex: 1 1 0;
   min-width: 0;
+}
+.pm-pop-gif {
+  display: grid;
+  gap: 8px;
+  padding: 6px 5px;
+}
+.pm-pop-gif label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px;
+  align-items: center;
+  gap: 8px;
+  color: var(--pm-text-3);
+  font-size: 11.5px;
+}
+.pm-pop-gif input {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--pm-line);
+  border-radius: 10px;
+  background: var(--pm-fill);
+  color: var(--pm-text-1);
+  font-size: 12px;
+}
+.pm-pop-gif input:focus-visible {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 1px;
+}
+.pm-pop-gif input:invalid {
+  border-color: var(--pm-error-border);
 }
 .pm-pop-wh {
   display: flex;

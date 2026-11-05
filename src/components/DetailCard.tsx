@@ -51,7 +51,11 @@ export function DetailCard(props: {
   const { row, images } = props.display;
   const p = row.params;
   const starred = !!row.starred;
-  const editImageId = props.selectedImageId ?? images[0]?.id ?? null;
+  const editImageId =
+    props.selectedImageId ??
+    images.find((image) => image.format === "gif")?.id ??
+    images[0]?.id ??
+    null;
   const inpaintRow = !!row.inpaint;
   // 多尺寸记录：尺寸列出每张图的实际像素，不显示张数；部分失败时标出没出图的比例
   const sizes = p.sizes;

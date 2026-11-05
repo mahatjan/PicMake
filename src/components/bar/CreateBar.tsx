@@ -53,11 +53,13 @@ interface FullBarProps {
   onRemoveMask: () => void;
   /** 接受建议输出尺寸 */
   onAcceptSize: () => void;
+  /** 窄屏：描述框用短占位文案，长示例在一行里会被截断 */
+  compact: boolean;
 }
 
 function FullBar(props: FullBarProps) {
   const { t } = useTranslation();
-  const { form: f, onPatch } = props;
+  const { form: f, onPatch, compact } = props;
   const fileRef = useRef<HTMLInputElement>(null);
   const editing = props.images.length > 0;
   const sketchIdx = props.images.findIndex((image) => image.isSketch);
@@ -156,7 +158,9 @@ function FullBar(props: FullBarProps) {
                 ? t("bar.placeholderSketch", { index: sketchIdx + 1 })
                 : editing
                   ? t("bar.placeholderEdit")
-                  : t("bar.placeholder")
+                  : compact
+                    ? t("bar.placeholderShort")
+                    : t("bar.placeholder")
           }
           disabled={props.reading}
           rows={1}

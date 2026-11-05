@@ -1,12 +1,15 @@
 /** 核心类型定义 */
 
-export type ModelId = "flare" | "sunburst" | "gpt2";
+export type ModelId = "flare" | "sunburst" | "gpt2" | "gpt26";
 export type Quality = "low" | "medium" | "high" | "xhigh" | "max";
 export type Background = "auto" | "transparent" | "opaque";
 export type InputFidelity = "low" | "high";
 /** 保真度选择：auto = 不发送 input_fidelity（部分中转拒绝该参数） */
 export type FidelityChoice = "auto" | InputFidelity;
-export type OutputFormat = "png" | "jpeg" | "webp";
+export type OutputFormat = "png" | "jpeg" | "webp" | "gif";
+
+export const DEFAULT_GIF_FRAMES = 32;
+export const DEFAULT_GIF_FRAME_DURATION = 50;
 
 export interface ApiConfig {
   baseUrl: string;
@@ -19,6 +22,7 @@ export const MODEL_NAMES: Record<ModelId, string> = {
   flare: "gpt-image-2.5-flare",
   sunburst: "gpt-image-2.5-sunburst",
   gpt2: "gpt-image-2",
+  gpt26: "gpt-image-2.6",
 };
 
 /** 具体像素尺寸 */
@@ -36,6 +40,9 @@ export interface GenParams {
   n: number;
   background: Background;
   outputFormat: OutputFormat;
+  /** 仅 GIF 输出使用；时长单位为毫秒。旧记录缺省使用默认值。 */
+  frames?: number;
+  frameDuration?: number;
   /** 多尺寸（2026-10-13）：提交时所选的 2–4 个尺寸，按比例 chip 顺序，每个尺寸单独一个请求。
    *  存在时 n = 1；size 取 sizes[0] 只为保持字段合法，展示与复用不得据此推断尺寸。
    *  单尺寸记录与旧记录没有这个字段 */

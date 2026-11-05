@@ -1,4 +1,4 @@
-/** 容器尺寸 / EXIF 方向读取与底图准备：只覆盖 JPEG/PNG/WebP 的 orientation 1–8。
+/** 容器尺寸 / EXIF 方向读取与底图准备：覆盖 JPEG/PNG/WebP 的 orientation 1–8 与 GIF 尺寸。
  *  损坏元数据返回明确错误，不让流程静默继续 */
 import { imageFormat } from "./input-images";
 import type { InpaintIssue } from "./types";
@@ -210,7 +210,18 @@ export function readImageMeta(blob: Blob): Promise<OrientationResult> {
     .arrayBuffer()
     .then((buffer) => {
       const view = new DataView(buffer);
-      const format = imageFormat(new Uint8Array(buffer));
+      const bytes = new Uint8Array(buffer);
+      const signature = String.fromCharCode(...bytes.slice(0, 6));
+      if (signature === "GIF87a" || signature === "GIF89a") {
+        if (view.byteLength < 13)
+          return { issue: "canvas-failed" as InpaintIssue };
+        const width = view.getUint16(6, true);
+        const height = view.getUint16(8, true);
+        if (!width || !height)
+          return { issue: "canvas-failed" as InpaintIssue };
+        return { orientation: 1 as const, width, height };
+      }
+      const format = imageFormat(bytes);
       if (format === "jpeg") return parseJpeg(view);
       if (format === "png") return parsePng(view);
       if (format === "webp") return parseWebp(view);

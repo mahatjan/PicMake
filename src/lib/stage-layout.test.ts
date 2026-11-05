@@ -35,6 +35,11 @@ describe("multiBox", () => {
     expect(multiBox({ w: 1440, h: 900 })).toEqual({ w: 824, h: 540 });
   });
 
+  it("窄屏详情浮卡默认收起：宽度用满屏宽，只留左右边距", () => {
+    expect(multiBox({ w: 390, h: 844 }).w).toBe(362);
+    expect(multiBox({ w: 760, h: 900 }).w).toBe(732);
+  });
+
   it("很小的窗口也有下限", () => {
     const box = multiBox({ w: 200, h: 200 });
     expect(box.w).toBeGreaterThanOrEqual(280);

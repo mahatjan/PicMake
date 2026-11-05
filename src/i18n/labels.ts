@@ -88,6 +88,7 @@ const MODEL_SUFFIX: Record<ModelId, "modelFast" | "modelDetailed" | null> = {
   flare: "modelFast",
   sunburst: "modelDetailed",
   gpt2: null,
+  gpt26: null,
 };
 
 export const modelSuffix = (model: ModelId, t: TFunction): string | null => {

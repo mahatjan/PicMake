@@ -6,6 +6,8 @@ import {
   ApiError,
   clientError,
   MODEL_NAMES,
+  DEFAULT_GIF_FRAMES,
+  DEFAULT_GIF_FRAME_DURATION,
   type ApiConfig,
   type GenParams,
   type ImageRequestResult,
@@ -106,6 +108,12 @@ function bodyFields(
     quality: params.quality,
     background: params.background,
     output_format: params.outputFormat,
+    ...(params.outputFormat === "gif"
+      ? {
+          frame_count: params.frames ?? DEFAULT_GIF_FRAMES,
+          frame_duration_ms: params.frameDuration ?? DEFAULT_GIF_FRAME_DURATION,
+        }
+      : {}),
     moderation: "auto",
     ...(streamEnabled ? { stream: true, partial_images: 3 } : {}),
   };

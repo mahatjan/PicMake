@@ -137,6 +137,7 @@ export const en = {
     downloadAll: "Download all",
     reuseAndRegenerate: "Reuse settings & regenerate",
     zoomAria: "View larger",
+    viewStatic: "View static image {{index}}",
     result: "Result {{index}}",
     zoom: "Enlarge",
     download: "Download",
@@ -200,6 +201,7 @@ export const en = {
     editLabel: "Edit prompt",
     placeholder:
       "Describe the picture you want, e.g. a small cabin on a snowy mountaintop with a warm lamp",
+    placeholderShort: "Describe the picture you want…",
     placeholderEdit:
       "e.g. Keep the product from Image 1 and use the background from Image 2",
     placeholderSketch:
@@ -301,6 +303,8 @@ export const en = {
       opaque: "Solid background",
     },
     format: "Output format",
+    gifFrames: "Frames",
+    gifFrameDuration: "Frame duration (ms)",
     keepOriginal: "Keep original",
     fidelityLow: "Low",
     fidelityHigh: "High",
@@ -647,6 +651,8 @@ export const en = {
 
   issues: {
     "empty-prompt": "Write a short prompt first",
+    "invalid-gif-params":
+      "GIF frames and frame duration must be positive integers",
     "not-integer": "Width and height must be whole numbers",
     "not-multiple-16": "Width and height must be divisible by 16",
     ratio: "Aspect ratio must be between 1:3 and 3:1",

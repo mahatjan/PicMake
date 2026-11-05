@@ -3,9 +3,9 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@heroui/react";
 import {
   Clapperboard,
+  Clock,
   Film,
   House,
-  Menu,
   Moon,
   Settings,
   Sun,
@@ -54,6 +54,8 @@ export function TopNav(props: {
         variant="ghost"
         isIconOnly
         size="sm"
+        // 窄屏隐藏（见 chrome.css）：外观在设置里也能切换，把位置让给常用入口
+        className="pm-nav-theme"
         aria-label={dark ? t("nav.toLight") : t("nav.toDark")}
         onPress={props.onToggleTheme}
       >
@@ -66,7 +68,7 @@ export function TopNav(props: {
         aria-label={t("nav.history")}
         onPress={props.onHistory}
       >
-        <Menu size={15} />
+        <Clock size={15} />
       </Button>
       <Button
         variant="ghost"

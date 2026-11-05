@@ -87,34 +87,38 @@ export function HistoryDrawer(props: {
                   </button>
                 )}
               </div>
-              <Segmented<HistoryRange>
-                full
-                mini
-                ariaLabel={t("history.rangeLabel")}
-                options={[
-                  { value: "all", label: t("history.range.all") },
-                  { value: "today", label: t("history.range.today") },
-                  { value: "7d", label: t("history.range.7d") },
-                  { value: "30d", label: t("history.range.30d") },
-                ]}
-                value={filter.range}
-                onChange={(range) => setFilter({ ...filter, range })}
-              />
-              <button
-                type="button"
-                className={"pm-dfav" + (filter.starredOnly ? " on" : "")}
-                aria-pressed={filter.starredOnly}
-                onClick={() =>
-                  setFilter({ ...filter, starredOnly: !filter.starredOnly })
-                }
-              >
-                <Star
-                  size={12}
-                  aria-hidden="true"
-                  fill={filter.starredOnly ? "currentColor" : "none"}
+              {/* 时间档与「只看收藏」同一行：收藏收成星标图标按钮，名称见 aria-label / title */}
+              <div className="pm-drange">
+                <Segmented<HistoryRange>
+                  full
+                  mini
+                  ariaLabel={t("history.rangeLabel")}
+                  options={[
+                    { value: "all", label: t("history.range.all") },
+                    { value: "today", label: t("history.range.today") },
+                    { value: "7d", label: t("history.range.7d") },
+                    { value: "30d", label: t("history.range.30d") },
+                  ]}
+                  value={filter.range}
+                  onChange={(range) => setFilter({ ...filter, range })}
                 />
-                {t("history.starredOnly")}
-              </button>
+                <button
+                  type="button"
+                  className={"pm-dfav" + (filter.starredOnly ? " on" : "")}
+                  aria-pressed={filter.starredOnly}
+                  aria-label={t("history.starredOnly")}
+                  title={t("history.starredOnly")}
+                  onClick={() =>
+                    setFilter({ ...filter, starredOnly: !filter.starredOnly })
+                  }
+                >
+                  <Star
+                    size={13}
+                    aria-hidden="true"
+                    fill={filter.starredOnly ? "currentColor" : "none"}
+                  />
+                </button>
+              </div>
             </div>
             {isHistoryFilterActive(filter) && list.length > 0 && (
               <div className="pm-dcount">

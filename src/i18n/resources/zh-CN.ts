@@ -135,6 +135,7 @@ export const zhCN = {
     downloadAll: "下载全部",
     reuseAndRegenerate: "复用参数再生成",
     zoomAria: "放大查看大图",
+    viewStatic: "查看静态图 {{index}}",
     result: "结果 {{index}}",
     zoom: "放大",
     download: "下载",
@@ -194,6 +195,7 @@ export const zhCN = {
     promptLabel: "画面描述",
     editLabel: "修改描述",
     placeholder: "描述你想要的画面，比如：雪夜的山顶小屋，一盏暖灯",
+    placeholderShort: "描述你想要的画面…",
     placeholderEdit: "例如：保留图1的商品，使用图2的背景",
     placeholderSketch:
       "根据图{{index}}的草图描述你想要的画面，例如材质、光线和风格。",
@@ -289,6 +291,8 @@ export const zhCN = {
       opaque: "纯色背景",
     },
     format: "输出格式",
+    gifFrames: "帧数",
+    gifFrameDuration: "每帧时长（ms）",
     keepOriginal: "保留原图",
     fidelityLow: "低",
     fidelityHigh: "高",
@@ -626,6 +630,7 @@ export const zhCN = {
   /** 提交前的校验提示（对应 lib 的 DraftIssue） */
   issues: {
     "empty-prompt": "先写一句画面描述",
+    "invalid-gif-params": "GIF 帧数和每帧时长须为正整数",
     "not-integer": "宽高须为整数",
     "not-multiple-16": "宽高须能被 16 整除",
     ratio: "宽高比须在 1:3 ～ 3:1 之间",

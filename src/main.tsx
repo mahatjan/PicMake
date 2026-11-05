@@ -24,7 +24,8 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <LocaleRoot>
       <App />
-      {/* toast() 只负责入队，必须挂这个区域才会显示。顶部居中避开左上导航、右上详情浮卡和底部创作条；
+      {/* toast() 只负责入队，必须挂这个区域才会显示。顶部居中避开左上导航、右上详情浮卡和底部创作条，
+          窄屏下移到顶栏下方（见 chrome.css）；
           hotkey 置空：不提供应用快捷键，且 macOS 上 Option+T 用于输入字符 */}
       <Toast.Provider placement="top" hotkey={[]} />
     </LocaleRoot>

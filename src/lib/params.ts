@@ -1,5 +1,6 @@
 /** 生成表单 ↔ API 参数映射（纯函数） */
 import { validateSize, type SizeIssue } from "./size";
+import { DEFAULT_GIF_FRAMES, DEFAULT_GIF_FRAME_DURATION } from "./types";
 import type {
   Background,
   GenParams,
@@ -21,6 +22,7 @@ export const MODEL_LABELS: Record<ModelId, string> = {
   flare: "Flare",
   sunburst: "Sunburst",
   gpt2: "GPT Image 2",
+  gpt26: "GPT Image 2.6",
 };
 
 /** 比例 chip 的顺序；「auto」的显示名随语言，见 i18n/labels.ts */
@@ -74,6 +76,8 @@ export interface GenForm {
   n: number;
   bg: Background;
   fmt: OutputFormat;
+  frames: string;
+  frameDuration: string;
   /** 多比例（2026-10-13）：开启后由 ratios 代替 ratio，「自动」与自定义宽高不参与 */
   multi: boolean;
   /** 多比例所选的预设比例，按 chip 顺序；开启时 1–MAX_MULTI_RATIOS 个，关闭时为空 */
@@ -91,6 +95,8 @@ export const DEFAULT_FORM: GenForm = {
   n: 1,
   bg: "auto",
   fmt: "png",
+  frames: String(DEFAULT_GIF_FRAMES),
+  frameDuration: String(DEFAULT_GIF_FRAME_DURATION),
   multi: false,
   ratios: [],
 };
@@ -171,6 +177,12 @@ export function formToParams(f: GenForm): GenParams {
     n: sizes ? 1 : f.n,
     background: f.bg,
     outputFormat: f.fmt,
+    ...(f.fmt === "gif"
+      ? {
+          frames: parseDimension(f.frames) ?? 0,
+          frameDuration: parseDimension(f.frameDuration) ?? 0,
+        }
+      : {}),
     ...(sizes ? { sizes } : {}),
   };
 }
@@ -305,6 +317,8 @@ export function paramsToForm(p: GenParams): GenForm {
     n: p.n,
     bg: p.background,
     fmt: p.outputFormat,
+    frames: String(p.frames ?? DEFAULT_GIF_FRAMES),
+    frameDuration: String(p.frameDuration ?? DEFAULT_GIF_FRAME_DURATION),
   };
   if (p.sizes && p.sizes.length >= 2) {
     const presets = presetsOfSizes(p.sizes);
@@ -325,11 +339,19 @@ export function paramsToForm(p: GenParams): GenForm {
 }
 
 /** 请求参数的问题码；界面文案见 i18n 资源 issues.* */
-export type ParamIssue = "empty-prompt" | SizeIssue;
+export type ParamIssue = "empty-prompt" | "invalid-gif-params" | SizeIssue;
 
 export function validateParams(p: GenParams): ParamIssue[] {
   const issues: ParamIssue[] = [];
   if (!p.prompt.trim()) issues.push("empty-prompt");
+  if (
+    p.outputFormat === "gif" &&
+    ![
+      p.frames ?? DEFAULT_GIF_FRAMES,
+      p.frameDuration ?? DEFAULT_GIF_FRAME_DURATION,
+    ].every((value) => Number.isSafeInteger(value) && value > 0)
+  )
+    issues.push("invalid-gif-params");
   if (p.size !== "auto") issues.push(...validateSize(p.size.w, p.size.h));
   for (const size of p.sizes ?? [])
     issues.push(...validateSize(size.w, size.h));

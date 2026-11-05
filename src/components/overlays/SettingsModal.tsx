@@ -130,32 +130,6 @@ export function SettingsModal(props: {
             <Modal.CloseTrigger />
             <h3>{t("settings.heading")}</h3>
             <p className="sub">{t("settings.subtitle")}</p>
-            <label>{t("settings.appearance")}</label>
-            <Segmented
-              full
-              ariaLabel={t("settings.appearance")}
-              options={[
-                { value: "light", label: t("settings.themeLight") },
-                { value: "dark", label: t("settings.themeDark") },
-                { value: "system", label: t("common.followSystem") },
-              ]}
-              value={props.theme}
-              onChange={props.onThemeChange}
-            />
-            <label>{t("settings.language")}</label>
-            <Segmented<LocalePref>
-              full
-              ariaLabel={t("settings.language")}
-              options={[
-                { value: "system", label: t("common.followSystem") },
-                ...LOCALES.map((locale) => ({
-                  value: locale,
-                  label: LOCALE_NAMES[locale],
-                })),
-              ]}
-              value={props.locale}
-              onChange={props.onLocaleChange}
-            />
             <label htmlFor="s-profile">{t("settings.apiProfile")}</label>
             <div className="pm-settings-profiles">
               <select
@@ -274,6 +248,33 @@ export function SettingsModal(props: {
               onChange={(e) => setVideoApiKey(e.target.value)}
             />
             <p className="pm-hint">{t("settings.videoKeyHint")}</p>
+            {/* 外观与语言即时生效、不随「保存」提交，放在连接配置之后：首次打开先看到要填的地址和 Key */}
+            <label>{t("settings.appearance")}</label>
+            <Segmented
+              full
+              ariaLabel={t("settings.appearance")}
+              options={[
+                { value: "light", label: t("settings.themeLight") },
+                { value: "dark", label: t("settings.themeDark") },
+                { value: "system", label: t("common.followSystem") },
+              ]}
+              value={props.theme}
+              onChange={props.onThemeChange}
+            />
+            <label>{t("settings.language")}</label>
+            <Segmented<LocalePref>
+              full
+              ariaLabel={t("settings.language")}
+              options={[
+                { value: "system", label: t("common.followSystem") },
+                ...LOCALES.map((locale) => ({
+                  value: locale,
+                  label: LOCALE_NAMES[locale],
+                })),
+              ]}
+              value={props.locale}
+              onChange={props.onLocaleChange}
+            />
             <p className="pm-hint">{storageText}</p>
             <div className="pm-mbtns">
               <Button

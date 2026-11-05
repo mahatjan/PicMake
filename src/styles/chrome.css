@@ -42,11 +42,16 @@
   background: var(--pm-line);
   margin: 0 4px;
 }
-/* 窄屏顶栏只留操作按钮，品牌和分隔线让给右上角详情 */
+/* 窄屏顶栏只留操作按钮，品牌和分隔线让给右上角详情；主题切换在设置的「外观」里 */
 @media (max-width: 760px) {
   .pm-brand,
-  .pm-nav .pm-vr {
+  .pm-nav .pm-vr,
+  .pm-nav .pm-nav-theme {
     display: none;
+  }
+  /* 通知放到顶栏下方，不再盖住导航按钮 */
+  .toast-region--top {
+    top: calc(70px + env(safe-area-inset-top, 0px));
   }
 }
 /* HeroUI ghost 图标按钮对齐原型灰阶 */

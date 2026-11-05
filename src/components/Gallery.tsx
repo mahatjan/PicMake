@@ -157,13 +157,17 @@ export function Gallery(props: {
                     !task.saving && (
                       <button
                         type="button"
-                        className="pm-bar-cancel"
+                        className="pm-bar-cancel pm-gal-cancel"
                         aria-label={t("gallery.cancelTask", {
                           prompt: task.prompt,
                         })}
                         onClick={() => props.onCancel(task.id)}
                       >
-                        {t("bar.genCancel")}
+                        {/* 窄屏只留图标，浮在缩略图右上角（见 stage.css） */}
+                        <X size={14} aria-hidden="true" />
+                        <span className="pm-gal-cancel-tx">
+                          {t("bar.genCancel")}
+                        </span>
                       </button>
                     )
                   )}

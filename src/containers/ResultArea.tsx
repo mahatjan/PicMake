@@ -181,7 +181,12 @@ export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
           canEdit={run.phase === "idle"}
           sources={sourceImages}
           onViewSource={setPreviewId}
-          onDownload={() => downloadImage(display, focusIdx ?? 0)}
+          onDownload={() => {
+            const gifIndex = display.images.findIndex(
+              (image) => image.format === "gif",
+            );
+            downloadImage(display, focusIdx ?? (gifIndex >= 0 ? gifIndex : 0));
+          }}
           onCopyPrompt={() => copyPrompt(display.row.prompt)}
           onReuse={() => reuseParams(display.row.id)}
           onEdit={editImage}

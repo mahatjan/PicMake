@@ -26,6 +26,7 @@ import {
 } from "../flows/navigation";
 import { useCreateBarInset } from "../hooks/useCreateBarInset";
 import { useDraftImages } from "../hooks/useDraftImages";
+import { useNarrowViewport } from "../hooks/useNarrowViewport";
 import type { WorkspaceAssets } from "../hooks/useWorkspaceAssets";
 import {
   clipboardHasText,
@@ -81,6 +82,7 @@ export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
         : assets.lastDoneDisplay;
   /** 预览的图：有展示记录时看它的来源图，否则看草稿里的输入图 */
   const previewImages = display ? sourceImages : draftImages;
+  const narrow = useNarrowViewport();
 
   // focusSeq 变化即聚焦描述框（展开创作条、草稿落位、描述为空时提交）
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -167,6 +169,7 @@ export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
         onEditMask={editMask}
         onRemoveMask={removeMask}
         onAcceptSize={acceptSize}
+        compact={narrow}
       />
 
       <InputPreview

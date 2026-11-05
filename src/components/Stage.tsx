@@ -499,10 +499,39 @@ export function Stage(props: {
   onCancel: () => void;
   onStart: () => void;
 }) {
+  const { t } = useTranslation();
   const { display, phase, partial, slots } = props;
   const isGen = phase === "generating";
   const done = !isGen && display;
-  const single = done && display.images.length === 1;
+  const gifImages =
+    display?.images.filter((image) => image.format === "gif") ?? [];
+  const gifDisplay =
+    done && gifImages.length > 0 ? { ...display, images: gifImages } : null;
+  const mainDisplay = gifDisplay ?? display;
+  const mainImage = mainDisplay?.images[0];
+  const originalIndex = (index: number) =>
+    display!.images.findIndex(
+      (image) => image.id === mainDisplay!.images[index].id,
+    );
+  const staticImages = gifDisplay
+    ? display!.images.filter((image) => image.format !== "gif")
+    : [];
+  const staticControls = staticImages.length > 0 && (
+    <div className="pm-gif-static-actions">
+      {staticImages.map((image, index) => (
+        <Button
+          key={image.id}
+          variant="secondary"
+          size="sm"
+          onPress={() => props.onLightbox(image.id)}
+        >
+          <Maximize2 size={13} />
+          {t("stage.viewStatic", { index: index + 1 })}
+        </Button>
+      ))}
+    </div>
+  );
+  const single = done && mainDisplay!.images.length === 1;
   // 多尺寸记录（2 张及以上）用等高并列的排版，其余多张仍是 2×2 网格
   const multi = done && !single && !!display.row.params.sizes;
   // 舞台背景取第一格（终稿或预览）的模糊延伸
@@ -511,7 +540,7 @@ export function Stage(props: {
       ? slots[0]?.url
       : partial?.url
     : done
-      ? display.images[0]?.url
+      ? mainImage?.url
       : null;
 
   return (
@@ -561,13 +590,14 @@ export function Stage(props: {
           <div key={display.row.id} className="pm-stage-swap">
             <StageSingle
               display={display}
-              img={display.images[0]}
+              img={mainImage!}
               onZoom={props.onLightbox}
             />
+            {staticControls}
           </div>
           <StageToolbar
-            onZoom={() => props.onLightbox(display.images[0].id)}
-            onDownload={() => props.onDownload(0)}
+            onZoom={() => props.onLightbox(mainImage!.id)}
+            onDownload={() => props.onDownload(originalIndex(0))}
             onReuse={props.onReuse}
             onEdit={props.onEdit}
             onDelete={props.onDelete}
@@ -578,22 +608,23 @@ export function Stage(props: {
         <div key={display.row.id} className="pm-stage-swap">
           {multi ? (
             <StageMulti
-              display={display}
+              display={mainDisplay!}
               viewport={props.viewport}
-              onZoomIn={(i) => props.onFocus(i)}
-              onDownload={props.onDownload}
+              onZoomIn={(i) => props.onFocus(originalIndex(i))}
+              onDownload={(i) => props.onDownload(originalIndex(i))}
               onDownloadAll={props.onDownloadAll}
               onReuse={props.onReuse}
             />
           ) : (
             <StageGrid
-              display={display}
-              onZoomIn={(i) => props.onFocus(i)}
-              onDownload={props.onDownload}
+              display={mainDisplay!}
+              onZoomIn={(i) => props.onFocus(originalIndex(i))}
+              onDownload={(i) => props.onDownload(originalIndex(i))}
               onDownloadAll={props.onDownloadAll}
               onReuse={props.onReuse}
             />
           )}
+          {staticControls}
         </div>
       )}
     </div>

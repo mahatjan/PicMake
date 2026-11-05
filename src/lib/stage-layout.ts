@@ -27,8 +27,18 @@ const STAGE_MARGIN = 84;
 /** 格子下方「共 N 个尺寸 · 下载全部」那一行（含间距）占的高度 */
 const CAP_ROW = 42;
 
+/** 窄屏断点，与 useNarrowViewport、stage.css 一致：详情浮卡默认收起，格子行可以用满屏宽 */
+const NARROW_MAX = 760;
+/** 窄屏舞台左右各留的边距（stage.css 的窄屏 padding） */
+const NARROW_SIDE = 14;
+
 /** 多尺寸排版可用的区域，随视口变化。与 stage.css 保持一致：舞台底部给创作条留 150px */
 export function multiBox(viewport: Box): Box {
+  if (viewport.w <= NARROW_MAX)
+    return {
+      w: Math.max(280, viewport.w - 2 * NARROW_SIDE),
+      h: Math.max(200, viewport.h - 150 - 2 * STAGE_MARGIN - CAP_ROW),
+    };
   return {
     w: Math.max(
       280,

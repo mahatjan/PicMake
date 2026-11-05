@@ -68,6 +68,16 @@
   place-items: center;
   animation: pm-swap-in 0.18s ease-out;
 }
+.pm-gif-static-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  margin-top: 12px;
+}
 @keyframes pm-swap-in {
   from {
     opacity: 0;
@@ -327,6 +337,19 @@
   flex: none;
   margin-left: 0;
 }
+/* 生成卡的取消：宽屏是文字按钮，窄屏换成缩略图右上角的图标按钮 */
+.pm-gal-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.pm-gal-cancel svg {
+  display: none;
+}
+.pm-gal-cancel:focus-visible {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 2px;
+}
 /* 失败的任务卡：留在列表里等用户重试 */
 .pm-gal-card.is-failed {
   box-shadow:
@@ -401,14 +424,57 @@
 }
 @media (max-width: 760px) {
   .pm-gal {
-    --pm-gal-grid: repeat(auto-fill, minmax(150px, 1fr));
+    /* 手机上固定两列（320 宽也不掉成一列），平板宽度再按最小宽度多排 */
+    --pm-gal-grid: repeat(auto-fill, minmax(min(150px, calc(50% - 6px)), 1fr));
     padding: 68px 14px calc(120px + max(0px, var(--pm-bar-top, 0px) + 16px));
   }
   .pm-gal-grid {
     gap: 12px;
   }
   .pm-gal-txt {
-    padding: 8px 10px 10px;
+    gap: 2px;
+    padding: 7px 10px 9px;
+  }
+  /* 两列卡片里描述只留一行，完整描述在详情里看 */
+  .pm-gal-p {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    font-size: 12px;
+  }
+  .pm-gal-meta {
+    font-size: 11px;
+  }
+  .pm-gal-card.is-gen {
+    position: relative;
+  }
+  /* 多尺寸生成卡没有缩略图，首行比例给右上角的取消键让位 */
+  .pm-gal-card.is-gen .pm-gal-slots {
+    padding-right: 48px;
+  }
+  .pm-gal-taskrow .pm-gal-cancel {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: 50%;
+    border-color: var(--pm-line);
+    background: var(--pm-panel-solid);
+    box-shadow: var(--pm-shadow);
+  }
+  /* 触控热区扩到 42px，图标仍保持小尺寸 */
+  .pm-gal-cancel::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+  }
+  .pm-gal-cancel svg {
+    display: block;
+  }
+  .pm-gal-cancel-tx {
+    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -591,8 +657,8 @@
   color: var(--pm-error);
 }
 /* 窄屏：一行五等分，图标在上、文字在下，避免「删除」单独掉到第二行。
-   工具条默认停在距底 200px。创作条被输入框撑高后，--pm-bar-top 是条上沿到视口底边的距离，
-   工具条改贴在条上方 10px，舞台留白同步上移；条没超过预留高度时保持原位。 */
+   --pm-bar-top 是创作条上沿到视口底边的距离：工具条始终贴在条上方 10px，
+   和创作条连成底部操作区；输入框撑高时工具条与舞台留白一起上移。 */
 @media (max-width: 760px) {
   /* 窄屏导航占满一行操作空间，生成进度放到导航下方，保留取消按钮的空间。 */
   .pm-gen-pill {
@@ -616,13 +682,45 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* 窄屏舞台：上让顶栏，下让创作条（--pm-bar-top）；单张结果还要再让出贴在创作条上方的工具条。
+     舞台向下盖住了底部安全区，按舞台底边定位时要把这段加回来 */
   .pm-stage {
-    padding-bottom: calc(
-      150px + max(0px, var(--pm-bar-top, 0px) + 10px - 200px)
+    --pm-stage-top: calc(72px + env(safe-area-inset-top, 0px));
+    --pm-stage-bottom: calc(
+      var(--pm-bar-top, 120px) + 16px + env(safe-area-inset-bottom, 0px)
+    );
+    padding: var(--pm-stage-top) 14px var(--pm-stage-bottom);
+  }
+  .pm-stage[data-mode="single"] {
+    --pm-stage-bottom: calc(
+      var(--pm-bar-top, 120px) + 84px + env(safe-area-inset-bottom, 0px)
     );
   }
+  /* 单张结果按图片自身比例撑满可用区域：宽不超过屏宽，高不超过顶栏与工具条之间（扣掉说明行） */
+  .pm-single img {
+    width: auto;
+    height: auto;
+    max-width: calc(100vw - 28px);
+    max-height: calc(
+      100vh - var(--pm-stage-top) - var(--pm-stage-bottom) - 34px +
+        env(safe-area-inset-bottom, 0px)
+    );
+    max-height: calc(
+      100dvh - var(--pm-stage-top) - var(--pm-stage-bottom) - 34px +
+        env(safe-area-inset-bottom, 0px)
+    );
+  }
+  .pm-single-meta {
+    margin-top: 10px;
+  }
+  .pm-grid4 {
+    grid-template-columns: repeat(2, calc((100vw - 28px - 10px) / 2));
+    gap: 10px;
+  }
   .pm-stage-toolbar {
-    bottom: max(200px, calc(var(--pm-bar-top, 0px) + 10px));
+    bottom: calc(
+      var(--pm-bar-top, 120px) + 10px + env(safe-area-inset-bottom, 0px)
+    );
     left: 12px;
     right: 12px;
     width: auto;
